@@ -59,7 +59,8 @@ class MainActivity : Activity() {
 
         recentText = TextView(this).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, 24, 0, 0)
+            setPadding(0, dp(24), 0, 0)
+            setOnClickListener { restoreRecent(showToast = true) }
         }
         root.addView(recentText)
 
@@ -109,13 +110,18 @@ class MainActivity : Activity() {
         restoreRecent()
     }
 
-    private fun restoreRecent() {
+    private fun restoreRecent(showToast: Boolean = false) {
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         val number = prefs.getString(KEY_NUMBER, "").orEmpty()
         val index = prefs.getInt(KEY_CARRIER, 0).coerceIn(Carriers.all.indices)
         carrierSpinner.setSelection(index)
         numberInput.setText(number)
+        numberInput.setSelection(number.length)
         recentText.text = if (number.isEmpty()) "" else getString(R.string.recent_query, Carriers.all[index].name, number)
+        recentText.isEnabled = number.isNotEmpty()
+        if (showToast && number.isNotEmpty()) {
+            Toast.makeText(this, R.string.recent_query_restored, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun handleSharedText(intent: Intent?) {

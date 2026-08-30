@@ -7,5 +7,6 @@
     <string name="open_browser_short">瀏覽器</string>
     <string name="number_copied">已複製單號</string>
     <string name="shared_number_filled">已從分享文字填入單號</string>
+    <string name="recent_query_restored">已帶入最近查詢</string>
     <string name="recent_query">最近查詢：%1$s / %2$s</string>
 </resources>

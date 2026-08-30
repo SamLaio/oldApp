@@ -13,7 +13,7 @@
 
 - 新版 app 使用原生 Android Kotlin。
 - 最低支援 Android 11（API 30）。
-- 目前版本皆為 `0.1`。
+- 目前版本：`seClock 0.1`、`findPacket 0.2`。
 - 每個 app 的 release 輸出放在各自 app 內：
 
 ```text

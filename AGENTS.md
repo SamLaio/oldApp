@@ -50,19 +50,29 @@ findPacket/release/[版本]/release.apk
 6. 確認 release 產物版本、資料夾版本與 release notes 版本一致。
 7. 不要 push APK、AAB、ZIP、EXE、keystore、`local.properties`、`key.properties`、build cache 或其他本機產物。
 
+## APK 產出前版本檢查
+
+每次產出 APK 前都要先做：
+
+1. 檢查目前 git commit 是否已經對應既有 release tag。
+2. 若目標 app 的目前版本已經發布過，且從該 release tag 之後已有新的 app 程式或使用者可見變更，必須先提升該 app 的 `versionCode`、`versionName` 與 release 資料夾版本，再進行 APK 編譯。
+3. 若只是重新產出同一個已發布 commit 的 APK，版本可維持不變，但必須確認 APK 來源 commit、release notes 與版本資料夾一致。
+4. 不要覆蓋既有已發布版本的 APK 來代表新的程式內容；新的程式內容應使用新的版本號與新的 `[app]/release/[版本]/` 資料夾。
+
 ## Release 前檢查
 
 每次 release 前都要做：
 
-1. 確認對應 app 的 `release/[版本]/release-notes.md` 已存在且內容為本次版本。
-2. 確認對應 app 的 `release/[版本]/release.apk` 已存在。
-3. 確認 release APK 是目前程式最新版建置出來的檔案。
-4. 確認 APK 版本與新專案的版本設定一致。
-5. 確認 Android SDK、minSdk、targetSdk、簽章、權限與語系資訊符合本次 release。
-6. 若 release 包含包裹查詢 app，確認各物流查詢入口已重新核對，並在 release notes 標明新增、移除或失效的物流項目。
-7. 若 release 包含時鐘 Widget app，確認白/黑主題已二合一，並在支援的 Android Launcher 上測試 Widget 新增、更新與尺寸調整。
-8. 發布 GitHub release 時，把對應 app 的 `release/[版本]/release-notes.md` 內容放到 release description。
-9. 發布 GitHub release 時，把對應 app 的 `release/[版本]/release.apk` 與需要的其他產物一併附上去。
+1. 完成 APK 產出前版本檢查。
+2. 確認對應 app 的 `release/[版本]/release-notes.md` 已存在且內容為本次版本。
+3. 確認對應 app 的 `release/[版本]/release.apk` 已存在。
+4. 確認 release APK 是目前程式最新版建置出來的檔案。
+5. 確認 APK 版本與新專案的版本設定一致。
+6. 確認 Android SDK、minSdk、targetSdk、簽章、權限與語系資訊符合本次 release。
+7. 若 release 包含包裹查詢 app，確認各物流查詢入口已重新核對，並在 release notes 標明新增、移除或失效的物流項目。
+8. 若 release 包含時鐘 Widget app，確認白/黑主題已二合一，並在支援的 Android Launcher 上測試 Widget 新增、更新與尺寸調整。
+9. 發布 GitHub release 時，把對應 app 的 `release/[版本]/release-notes.md` 內容放到 release description。
+10. 發布 GitHub release 時，把對應 app 的 `release/[版本]/release.apk` 與需要的其他產物一併附上去。
 
 ## 簽章設定慣例
 
