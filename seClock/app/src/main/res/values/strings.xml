@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">seClock</string>
+    <string name="theme_hint">選擇舊版白色或黑色透明底樣式，桌面時鐘會立即更新。</string>
+    <string name="theme_auto">跟隨系統</string>
+    <string name="theme_light">白字版本</string>
+    <string name="theme_dark">黑字版本</string>
+    <string name="click_hint">選擇桌面 widget 點擊後要開啟的內容。</string>
+    <string name="click_settings">開啟設定</string>
+    <string name="click_clock">開啟時鐘</string>
+    <string name="click_pick_app">選擇開啟的app</string>
+    <string name="click_pick_app_with_name">選擇開啟的app：%1$s</string>
+    <string name="click_no_apps">找不到可開啟的 app。</string>
+    <string name="next_alarm">下一個鬧鐘 %1$s</string>
+    <string name="widget_sony_clock">Sony時鐘</string>
+    <string name="widget_sony_clock_2">Sony時鐘2</string>
+    <string name="widget_digital_clock">數位時鐘</string>
+    <string name="widget_analog_clock">指針時鐘</string>
+</resources>

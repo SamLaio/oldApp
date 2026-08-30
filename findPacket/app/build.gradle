@@ -1,0 +1,57 @@
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+}
+
+def signingStoreFilePath = System.getenv("SIGNING_STORE_FILE") ?: "D:\\project\\apkKey\\oldApp.jks"
+def hasReleaseSigning = file(signingStoreFilePath).exists()
+        && System.getenv("SIGNING_STORE_PASSWORD")
+        && System.getenv("SIGNING_KEY_ALIAS")
+        && System.getenv("SIGNING_KEY_PASSWORD")
+
+android {
+    namespace "com.samliao.findpacket"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.samliao.findpacket"
+        minSdk 30
+        targetSdk 35
+        versionCode 1
+        versionName "0.1"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(signingStoreFilePath)
+            storePassword System.getenv("SIGNING_STORE_PASSWORD") ?: ""
+            keyAlias System.getenv("SIGNING_KEY_ALIAS") ?: ""
+            keyPassword System.getenv("SIGNING_KEY_PASSWORD") ?: ""
+        }
+    }
+
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.outputs.each { output ->
+            output.outputFileName.set("release.apk")
+        }
+    }
+}

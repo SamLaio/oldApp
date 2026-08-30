@@ -1,0 +1,16 @@
+fix/
+**/release/
+.idea/
+.tmp_*/
+
+# Android local files and build outputs
+local.properties
+key.properties
+*.local.ps1
+*.jks
+*.keystore
+*.apk
+*.aab
+.gradle/
+build/
+**/build/
