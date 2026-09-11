@@ -110,7 +110,6 @@ class WebActivity : Activity() {
               }
               function fillInput(input) {
                 if (!input) return false;
-                input.focus();
                 input.value = number;
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 input.dispatchEvent(new Event('change', { bubbles: true }));

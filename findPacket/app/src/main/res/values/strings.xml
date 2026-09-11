@@ -2,11 +2,19 @@
     <string name="app_name">findPacket</string>
     <string name="tracking_number">物流單號</string>
     <string name="tracking_number_hint">輸入物流單號</string>
+    <string name="package_note_hint">備註，例如：蝦皮鍵盤</string>
     <string name="open_webview">開啟內建查詢頁</string>
     <string name="open_browser">用外部瀏覽器開啟</string>
     <string name="open_browser_short">瀏覽器</string>
+    <string name="delete">刪除</string>
+    <string name="cancel">取消</string>
+    <string name="day_mode">日間</string>
+    <string name="night_mode">夜間</string>
+    <string name="day_mode_icon">☀</string>
+    <string name="night_mode_icon">☾</string>
     <string name="number_copied">已複製單號</string>
     <string name="shared_number_filled">已從分享文字填入單號</string>
     <string name="recent_query_restored">已帶入最近查詢</string>
     <string name="recent_query">最近查詢：%1$s / %2$s</string>
+    <string name="recent_query_with_note">%1$s：%2$s / %3$s</string>
 </resources>

@@ -6,6 +6,7 @@ object Carriers {
         Carrier("中華郵政", "https://postserv.post.gov.tw/pstmail/main_mail.html"),
         Carrier("7-11 交貨便 / 取貨便", "https://eservice.7-11.com.tw/e-tracking/search.aspx", "#txtProductNum"),
         Carrier("全家 FamiPort 店到店", "https://fmec.famiport.com.tw/FP_Entrance/QueryBox", "input[name='orderno']"),
+        Carrier("萊爾富", "https://www.hilife.com.tw/shipment-status"),
         Carrier("OK 超商", "https://ecservice.okmart.com.tw/Tracking/Search", "#inputOdNo"),
         Carrier("ezShip", "https://www.ezship.com.tw/receiver_query/ezship_query_shipstatus_2017.jsp"),
         Carrier("蝦皮店到店", "https://spx.tw/"),
