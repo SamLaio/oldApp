@@ -2,6 +2,7 @@ fix/
 **/release/
 .idea/
 .tmp_*/
+.codex-remote-attachments/
 
 # Android local files and build outputs
 local.properties
@@ -12,5 +13,9 @@ key.properties
 *.apk
 *.aab
 .gradle/
+**/.kotlin/
 build/
 **/build/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

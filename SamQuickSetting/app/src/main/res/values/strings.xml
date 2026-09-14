@@ -2,6 +2,7 @@
     <string name="app_name">SamQuickSetting</string>
     <string name="app_summary">建立一個可放設定鈕、可移動按鈕與可設定背景的懸浮快捷面板。</string>
     <string name="open_floating_panel">開啟懸浮面板</string>
+    <string name="show_edge_handle">顯示側邊條</string>
     <string name="shortcut_open_panel_short">開面板</string>
     <string name="shortcut_open_panel_long">開啟懸浮面板</string>
     <string name="settings_done">確定</string>

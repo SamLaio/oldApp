@@ -56,5 +56,9 @@
             android:name=".FloatingPanelService"
             android:exported="false" />
 
+        <service
+            android:name=".PanelHandleService"
+            android:exported="false" />
+
     </application>
 </manifest>

@@ -1,0 +1,53 @@
+<resources>
+    <string name="app_name">SamMiniCam</string>
+    <string name="app_summary">Canon Mini Cam / FV-100 的 Android 10+ 原生 Kotlin 測試版。</string>
+    <string name="request_permissions">檢查並要求權限</string>
+    <string name="scan_devices">掃描 BLE 裝置</string>
+    <string name="camera_serial_number">12 碼相機序號</string>
+    <string name="camera_wifi_ssid">相機 Wi-Fi SSID</string>
+    <string name="camera_wifi_password">相機 Wi-Fi 密碼</string>
+    <string name="camera_wifi_mac">WIFI MAC，可提高隱藏 Wi-Fi 連線成功率</string>
+    <string name="camera_bt_mac">BT MAC，掃描找不到時可直接連線</string>
+    <string name="connect_ble_by_bt_mac">用 BT MAC 連線 BLE</string>
+    <string name="connect_camera_wifi">連接相機 Wi-Fi</string>
+    <string name="probe_camera">測試相機 HTTP</string>
+    <string name="open_rtsp_preview">開啟 RTSP 預覽</string>
+    <string name="permissions_ready">必要 runtime 權限已允許，可以開始接硬體流程。</string>
+    <string name="permissions_missing">尚有 %1$d 個 runtime 權限未允許。</string>
+    <string name="bluetooth_unavailable">藍牙未開啟或此裝置不支援 BLE 掃描。</string>
+    <string name="scan_started">開始掃描 BLE 裝置，約 12 秒後停止。</string>
+    <string name="scan_failed">BLE 掃描失敗：%1$d</string>
+    <string name="unknown_device">未知裝置</string>
+    <string name="device_found">找到：%1$s / %2$s / RSSI %3$d</string>
+    <string name="device_row">%1$s\n%2$s   RSSI %3$d\n點擊連線並列出 GATT services</string>
+    <string name="ble_connecting">連線 BLE：%1$s</string>
+    <string name="ble_connected">BLE 已連線，開始 discover services。</string>
+    <string name="ble_disconnected">BLE 已斷線，status=%1$d</string>
+    <string name="ble_services">GATT services，status=%1$d：\n%2$s</string>
+    <string name="ble_notify">收到 BLE notify：%1$s，%2$d bytes</string>
+    <string name="ssid_required">請先輸入相機 Wi-Fi SSID。</string>
+    <string name="serial_invalid">相機序號需至少 9 碼，建議輸入外殼上的 12 碼序號。</string>
+    <string name="wifi_mac_invalid">WIFI MAC 格式不正確，請輸入像 D4:2C:3D:26:1E:E7 的格式。</string>
+    <string name="bt_mac_invalid">BT MAC 格式不正確，請輸入像 D4:2C:3D:26:1E:E8 的格式。</string>
+    <string name="manual_wifi_title">切換相機 Wi-Fi</string>
+    <string name="manual_wifi_message">SSID：%1$s\n密碼：%2$s\n\nAndroid 10+ 通常不會讓 app 直接切換全手機 Wi-Fi。請先用「app 內連線相機」讓本 app 連到相機網路；成功後會自動測試相機 HTTP。若仍失敗，再用「新增隱藏 Wi-Fi」。</string>
+    <string name="open_wifi_panel">app 內連線相機</string>
+    <string name="copy_wifi_password">複製密碼</string>
+    <string name="auto_wifi_request">新增隱藏 Wi-Fi</string>
+    <string name="wifi_password_copied">已複製相機 Wi-Fi 密碼。</string>
+    <string name="manual_wifi_resumed">已回到 app，開始測試相機 Wi-Fi：%1$s</string>
+    <string name="hidden_wifi_saved">Android 系統已接收隱藏 Wi-Fi 設定，開始測試相機。</string>
+    <string name="hidden_wifi_canceled">未新增隱藏 Wi-Fi，使用者取消或系統拒絕。</string>
+    <string name="hidden_wifi_suggestion_result">已送出 Android 10 Wi-Fi suggestion，狀態碼：%1$d。請在系統通知或 Wi-Fi 面板允許後再回 app。</string>
+    <string name="camera_wifi_requested">已要求 Android 讓本 app 連接相機 Wi-Fi：%1$s；若有彈出手機系統視窗，請在手機上確認。</string>
+    <string name="camera_wifi_requested_without_bssid">已改用隱藏 SSID 重新要求本 app 連接：%1$s；若有彈出手機系統視窗，請在手機上確認。</string>
+    <string name="camera_wifi_retry_without_bssid">精準 WIFI MAC / BSSID 連線未找到相機 AP，改用隱藏 SSID 再試一次。</string>
+    <string name="camera_wifi_connected">已連上並綁定相機 Wi-Fi：%1$s</string>
+    <string name="camera_wifi_unavailable">相機 Wi-Fi 連線失敗：可能是手機系統視窗取消、找不到隱藏 Wi-Fi，或相機尚未進入 AP / handover 狀態。</string>
+    <string name="camera_wifi_lost">相機 Wi-Fi 已中斷。</string>
+    <string name="current_wifi_state">目前 Wi-Fi：%1$s / IP：%2$s</string>
+    <string name="http_probe_started">測試相機 HTTP：%1$s</string>
+    <string name="http_probe_result">HTTP 測試結果：%1$s</string>
+    <string name="rtsp_preview_started">開始播放：%1$s</string>
+    <string name="rtsp_preview_failed">RTSP 預覽失敗：what=%1$d extra=%2$d</string>
+</resources>

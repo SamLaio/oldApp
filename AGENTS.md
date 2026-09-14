@@ -38,6 +38,7 @@
 ```text
 seClock/release/[版本]/release-notes.md
 findPacket/release/[版本]/release-notes.md
+SamMiniCam/release/[版本]/release-notes.md
 ```
 
 5. 若已建置 APK，確認 APK 固定放在對應 app 資料夾內：
@@ -45,6 +46,7 @@ findPacket/release/[版本]/release-notes.md
 ```text
 seClock/release/[版本]/release.apk
 findPacket/release/[版本]/release.apk
+SamMiniCam/release/[版本]/release.apk
 ```
 
 6. 確認 release 產物版本、資料夾版本與 release notes 版本一致。
@@ -99,6 +101,7 @@ D:\project\apkKey\oldApp.jks
 ```text
 seClock/
 findPacket/
+SamMiniCam/
 ```
 
 - APK 固定路徑：

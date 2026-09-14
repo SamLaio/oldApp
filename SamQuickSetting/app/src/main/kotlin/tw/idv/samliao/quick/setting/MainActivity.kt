@@ -52,6 +52,7 @@ class MainActivity : Activity() {
         })
 
         root.addView(actionButton(R.string.open_floating_panel) { openFloatingPanel() })
+        root.addView(actionButton(R.string.show_edge_handle) { showEdgeHandle() })
         root.addView(actionButton(R.string.choose_tool) { chooseToolGroup() })
         root.addView(actionButton(R.string.add_app_shortcut) { chooseAppShortcut() })
         root.addView(actionButton(R.string.choose_background) { chooseBackground() })
@@ -234,6 +235,14 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA)
         }
         startService(Intent(this, FloatingPanelService::class.java))
+    }
+
+    private fun showEdgeHandle() {
+        if (!QuickActions.canDrawOverlays(this)) {
+            QuickActions.requestOverlayPermission(this)
+            return
+        }
+        startService(Intent(this, PanelHandleService::class.java))
     }
 
     private fun refreshPanelItems() {
