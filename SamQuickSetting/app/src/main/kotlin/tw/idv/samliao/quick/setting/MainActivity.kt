@@ -18,6 +18,7 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var itemsView: LinearLayout
     private lateinit var storageView: TextView
+    private lateinit var lockButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,7 +34,8 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        storageView.text = QuickActions.storageInfo(this)
+        if (::storageView.isInitialized) storageView.text = QuickActions.storageInfo(this)
+        if (::lockButton.isInitialized) updateLockButton()
     }
 
     private fun createContentView(): View {
@@ -54,6 +56,8 @@ class MainActivity : Activity() {
         root.addView(actionButton(R.string.add_app_shortcut) { chooseAppShortcut() })
         root.addView(actionButton(R.string.choose_background) { chooseBackground() })
         root.addView(actionButton(R.string.choose_grid) { chooseGrid() })
+        lockButton = actionButton(R.string.lock_panel) { togglePanelLock() }
+        root.addView(lockButton)
         root.addView(actionButton(R.string.clear_panel) {
             PanelConfig.clear(this)
             refreshPanelItems()
@@ -130,6 +134,7 @@ class MainActivity : Activity() {
             Toast.makeText(this, R.string.panel_no_space, Toast.LENGTH_SHORT).show()
             return
         }
+        DebugLog.write(this, "settings add setting=$id")
         PanelConfig.addSetting(this, id)
         refreshPanelItems()
     }
@@ -147,7 +152,9 @@ class MainActivity : Activity() {
                     Toast.makeText(this, R.string.panel_no_space, Toast.LENGTH_SHORT).show()
                     return@setItems
                 }
-                PanelConfig.addApp(this, apps[index].activityInfo.packageName)
+                val packageName = apps[index].activityInfo.packageName
+                DebugLog.write(this, "settings add app package=$packageName")
+                PanelConfig.addApp(this, packageName)
                 refreshPanelItems()
             }
             .show()
@@ -205,6 +212,17 @@ class MainActivity : Activity() {
                 PanelConfig.setGrid(this, grid.id)
             }
             .show()
+    }
+
+    private fun togglePanelLock() {
+        val locked = !PanelConfig.isLocked(this)
+        PanelConfig.setLocked(this, locked)
+        DebugLog.write(this, "settings panel locked=$locked")
+        updateLockButton()
+    }
+
+    private fun updateLockButton() {
+        lockButton.text = getString(if (PanelConfig.isLocked(this)) R.string.unlock_panel else R.string.lock_panel)
     }
 
     private fun openFloatingPanel() {

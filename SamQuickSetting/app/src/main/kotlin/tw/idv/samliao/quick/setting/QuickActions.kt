@@ -12,6 +12,8 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.net.wifi.WifiManager
+import android.nfc.NfcAdapter
+import android.os.BatteryManager
 import android.os.Environment
 import android.os.StatFs
 import android.provider.Settings
@@ -25,8 +27,9 @@ object QuickActions {
     private const val KEY_TORCH_ON = "torch_on"
     private const val KEY_SELECTED_APP = "selected_app"
 
-    fun run(context: Context, id: String): Boolean =
-        when (id) {
+    fun run(context: Context, id: String): Boolean {
+        DebugLog.write(context, "run action=$id")
+        val result = when (id) {
             "brightness" -> toggleBrightness(context)
             "volume" -> cycleVolume(context).let { true }
             "ringer" -> toggleRinger(context).let { true }
@@ -39,14 +42,20 @@ object QuickActions {
             "bluetooth" -> openBluetooth(context).let { true }
             "location" -> openLocation(context).let { true }
             "hotspot" -> openHotspot(context).let { true }
+            "nfc" -> openNfc(context).let { true }
             "storage" -> Toast.makeText(context, storageInfo(context), Toast.LENGTH_LONG).show().let { true }
+            "battery" -> Toast.makeText(context, batteryStatus(context), Toast.LENGTH_LONG).show().let { true }
             else -> false
         }
+        DebugLog.write(context, "run action=$id result=$result")
+        return result
+    }
 
     fun openWifi(context: Context) = openSettings(context, Settings.ACTION_WIFI_SETTINGS)
     fun openBluetooth(context: Context) = openSettings(context, Settings.ACTION_BLUETOOTH_SETTINGS)
     fun openLocation(context: Context) = openSettings(context, Settings.ACTION_LOCATION_SOURCE_SETTINGS)
     fun openHotspot(context: Context) = openSettings(context, ACTION_TETHER_SETTINGS, Settings.ACTION_WIRELESS_SETTINGS)
+    fun openNfc(context: Context) = openSettings(context, Settings.ACTION_NFC_SETTINGS, Settings.ACTION_WIRELESS_SETTINGS)
 
     fun status(context: Context, id: String): String =
         runCatching {
@@ -62,7 +71,9 @@ object QuickActions {
                 "bluetooth" -> "點選開 Bluetooth 設定"
                 "location" -> locationStatus(context)
                 "hotspot" -> "點選開 Wi-Fi 熱點設定"
+                "nfc" -> nfcStatus(context)
                 "storage" -> storageInfo(context).replace("\n", " / ")
+                "battery" -> batteryStatus(context)
                 else -> ""
             }
         }.getOrDefault("點選開啟")
@@ -81,13 +92,16 @@ object QuickActions {
                 "bluetooth" -> onOffShort(isBluetoothOn(context))
                 "location" -> locationStatusShort(context)
                 "hotspot" -> "設定頁"
+                "nfc" -> nfcStatusShort(context)
                 "storage" -> storageFreePercent(context)
+                "battery" -> "${batteryPercent(context)}%"
                 else -> ""
             }
         }.getOrDefault("")
 
     fun panelColor(context: Context, id: String): Int =
         runCatching {
+            if (id == "battery") return@runCatching batteryLineColor(context)
             val enabled = when (id) {
                 "rotation" -> Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
                 "sync" -> ContentResolver.getMasterSyncAutomatically()
@@ -96,6 +110,7 @@ object QuickActions {
                 "wifi" -> isWifiActive(context)
                 "bluetooth" -> isBluetoothOn(context)
                 "location" -> Settings.Secure.getInt(context.contentResolver, Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_OFF) != Settings.Secure.LOCATION_MODE_OFF
+                "nfc" -> isNfcOn(context)
                 else -> null
             }
             when (enabled) {
@@ -123,30 +138,46 @@ object QuickActions {
                 "bluetooth" -> R.drawable.ic_bluetooth
                 "location" -> R.drawable.ic_gps
                 "hotspot" -> R.drawable.ic_hotspot
+                "nfc" -> R.drawable.ic_nfc
                 "storage" -> R.drawable.ic_memory
+                "battery" -> R.drawable.ic_battery
                 else -> 0
             }
         }.getOrDefault(0)
 
     fun cycleVolume(context: Context) {
-        val audio = context.getSystemService(AudioManager::class.java)
-        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        val current = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val max = volumeMax(context)
+        val current = volumeIndex(context)
         val steps = intArrayOf(0, max / 4, max / 2, max * 3 / 4, max).distinct().toIntArray()
         val next = steps.firstOrNull { it > current } ?: steps[0]
-        audio.setStreamVolume(AudioManager.STREAM_MUSIC, next, AudioManager.FLAG_SHOW_UI)
+        val actual = setVolumeIndex(context, next)
+        DebugLog.write(context, "volume cycle max=$max current=$current target=$next actual=$actual")
     }
 
-    fun volumePercent(context: Context): Int {
-        val audio = context.getSystemService(AudioManager::class.java)
-        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        return audio.getStreamVolume(AudioManager.STREAM_MUSIC) * 100 / max
-    }
+    fun volumeMax(context: Context): Int =
+        context.getSystemService(AudioManager::class.java).getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
 
-    fun setVolumePercent(context: Context, percent: Int) {
+    fun volumeIndex(context: Context): Int =
+        context.getSystemService(AudioManager::class.java).getStreamVolume(AudioManager.STREAM_MUSIC)
+
+    fun volumePercent(context: Context): Int =
+        volumePercent(context, volumeIndex(context))
+
+    fun volumePercent(context: Context, index: Int): Int =
+        (index.coerceIn(0, volumeMax(context)) * 100 / volumeMax(context)).coerceIn(0, 100)
+
+    fun setVolumeIndex(context: Context, index: Int): Int {
         val audio = context.getSystemService(AudioManager::class.java)
-        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        audio.setStreamVolume(AudioManager.STREAM_MUSIC, (percent.coerceIn(0, 100) * max / 100), 0)
+        val max = volumeMax(context)
+        val target = index.coerceIn(0, max)
+        if (audio.isVolumeFixed) {
+            DebugLog.write(context, "volume fixed target=$target max=$max")
+            return volumeIndex(context)
+        }
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
+        val actual = volumeIndex(context)
+        DebugLog.write(context, "volume set target=$target max=$max actual=$actual percent=${volumePercent(context, actual)}")
+        return actual
     }
 
     fun toggleRinger(context: Context) {
@@ -189,6 +220,7 @@ object QuickActions {
         val value = (percent.coerceIn(1, 100) * 255 / 100).coerceIn(1, 255)
         Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
         Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, value)
+        DebugLog.write(context, "brightness slider request=$percent value=$value actual=${brightnessPercent(context)}")
         return true
     }
 
@@ -249,6 +281,7 @@ object QuickActions {
 
     fun launchApp(context: Context, packageName: String): Boolean {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        DebugLog.write(context, "launch app package=$packageName")
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         return true
     }
@@ -267,6 +300,38 @@ object QuickActions {
         val free = stats.availableBlocksLong * stats.blockSizeLong
         val freePercent = if (total == 0L) 0 else (free * 100 / total).toInt()
         return "可用 $freePercent%"
+    }
+
+    private fun batteryIntent(context: Context): Intent? =
+        context.registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+
+    private fun batteryPercent(context: Context): Int {
+        val intent = batteryIntent(context) ?: return 0
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        return if (level >= 0 && scale > 0) (level * 100 / scale).coerceIn(0, 100) else 0
+    }
+
+    private fun batteryPlugged(context: Context): Int =
+        batteryIntent(context)?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+
+    private fun batteryStatus(context: Context): String {
+        val plugged = batteryPlugged(context)
+        val charging = when {
+            plugged and BatteryManager.BATTERY_PLUGGED_WIRELESS != 0 -> "無線充電中"
+            plugged != 0 -> "有線充電中"
+            else -> "未充電"
+        }
+        return "電量 ${batteryPercent(context)}% / $charging"
+    }
+
+    private fun batteryLineColor(context: Context): Int {
+        val plugged = batteryPlugged(context)
+        return when {
+            plugged and BatteryManager.BATTERY_PLUGGED_WIRELESS != 0 -> 0xFFFBC02D.toInt()
+            plugged != 0 -> 0xFF7CB342.toInt()
+            else -> 0xFF78909C.toInt()
+        }
     }
 
     private fun brightnessStatus(context: Context): String {
@@ -345,6 +410,15 @@ object QuickActions {
     private fun isBluetoothOn(context: Context): Boolean =
         Settings.Global.getInt(context.contentResolver, "bluetooth_on", 0) != 0
 
+    private fun isNfcOn(context: Context): Boolean =
+        NfcAdapter.getDefaultAdapter(context)?.isEnabled == true
+
+    private fun nfcStatus(context: Context): String =
+        if (NfcAdapter.getDefaultAdapter(context) == null) "此裝置不支援 NFC" else "NFC ${onOff(isNfcOn(context))}"
+
+    private fun nfcStatusShort(context: Context): String =
+        if (NfcAdapter.getDefaultAdapter(context) == null) "未支援" else onOffShort(isNfcOn(context))
+
     private fun onOff(enabled: Boolean): String = if (enabled) "開啟" else "關閉"
 
     private fun onOffShort(enabled: Boolean): String = if (enabled) "開" else "關"
@@ -365,6 +439,7 @@ object QuickActions {
     }
 
     private fun openSettings(context: Context, action: String, fallbackAction: String? = null) {
+        DebugLog.write(context, "open settings action=$action fallback=$fallbackAction")
         try {
             context.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (_: ActivityNotFoundException) {

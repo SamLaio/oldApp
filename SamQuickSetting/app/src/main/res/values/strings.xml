@@ -14,6 +14,8 @@
     <string name="add_app_shortcut">加入應用程式捷徑</string>
     <string name="choose_background">設定面板背景</string>
     <string name="choose_grid">設定面板格數</string>
+    <string name="lock_panel">鎖定面板</string>
+    <string name="unlock_panel">解鎖面板</string>
     <string name="grid_3x4">3 x 4</string>
     <string name="grid_4x5">4 x 5</string>
     <string name="grid_5x6">5 x 6</string>
@@ -44,10 +46,12 @@
     <string name="action_torch">手電筒</string>
     <string name="action_app_shortcut">應用程式捷徑</string>
     <string name="action_storage">儲存空間資訊</string>
+    <string name="action_battery">電量</string>
     <string name="open_wifi_settings">Wi-Fi 設定</string>
     <string name="open_bluetooth_settings">Bluetooth 設定</string>
     <string name="open_location_settings">位置設定</string>
     <string name="open_hotspot_settings">Wi-Fi 熱點設定</string>
+    <string name="open_nfc_settings">NFC 設定</string>
     <string name="refresh_storage">重新整理儲存空間</string>
     <string name="storage_info">可用空間：%1$s\n總空間：%2$s\n已使用：約 %3$d%%</string>
 </resources>

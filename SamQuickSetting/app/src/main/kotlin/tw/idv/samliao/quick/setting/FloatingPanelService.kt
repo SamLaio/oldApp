@@ -2,6 +2,7 @@ package tw.idv.samliao.quick.setting
 
 import android.app.Service
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
@@ -11,6 +12,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -25,6 +27,7 @@ import kotlin.math.min
 class FloatingPanelService : Service() {
     private lateinit var windowManager: WindowManager
     private var panelView: View? = null
+    private var actionLayerView: View? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -49,6 +52,8 @@ class FloatingPanelService : Service() {
 
         val background = PanelConfig.background(this)
         val grid = PanelConfig.grid(this)
+        val locked = PanelConfig.isLocked(this)
+        DebugLog.write(this, "panel show items=${PanelConfig.items(this).size} grid=${grid.columns}x${grid.rows} locked=$locked")
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -67,6 +72,7 @@ class FloatingPanelService : Service() {
                 bottomMargin = dp(8)
             })
         }
+        actionLayerView = actionLayer
         root.addView(
             workspace,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
@@ -87,7 +93,7 @@ class FloatingPanelService : Service() {
                 leftMargin = position.x
                 topMargin = position.y
             })
-            makeMovable(workspace, view, key, index, actionLayer, deleteTarget)
+            if (!locked) makeMovable(workspace, view, key, index, actionLayer, deleteTarget)
         }
 
         workspace.addView(
@@ -125,6 +131,7 @@ class FloatingPanelService : Service() {
     }
 
     private fun openSettings() {
+        DebugLog.write(this, "panel open settings")
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         stopSelf()
     }
@@ -134,29 +141,33 @@ class FloatingPanelService : Service() {
             item.startsWith(PanelConfig.PREFIX_SETTING) -> {
                 val id = item.removePrefix(PanelConfig.PREFIX_SETTING)
                 if (id == "brightness" || id == "volume") {
+                    val isVolume = id == "volume"
                     sliderToolButton(
                         PanelConfig.settingLabel(this, id),
                         QuickActions.panelStatus(this, id),
-                        QuickActions.panelIcon(this, id),
+                        if (isVolume) R.drawable.ic_volume_control else QuickActions.panelIcon(this, id),
                         QuickActions.panelColor(this, id),
-                        if (id == "brightness") QuickActions.brightnessPercent(this) else QuickActions.volumePercent(this),
+                        if (isVolume) QuickActions.volumeIndex(this) else QuickActions.brightnessPercent(this),
+                        if (isVolume) QuickActions.volumeMax(this) else 100,
                         showAccentLine = id == "brightness",
-                        { value ->
-                            if (id == "brightness") {
-                                QuickActions.setBrightnessPercent(this, value)
+                        progressText = { value ->
+                            if (isVolume) "${QuickActions.volumePercent(this, value)}%" else "$value%"
+                        },
+                        currentProgress = {
+                            if (isVolume) QuickActions.volumeIndex(this) else QuickActions.brightnessPercent(this)
+                        },
+                        onProgress = { value ->
+                            if (isVolume) {
+                                QuickActions.setVolumeIndex(this, value)
                             } else {
-                                QuickActions.setVolumePercent(this, value)
+                                QuickActions.setBrightnessPercent(this, value)
+                                value
                             }
                         }
-                    ) {
-                        if (!QuickActions.run(this, id)) {
-                            Toast.makeText(this, R.string.action_failed, Toast.LENGTH_SHORT).show()
-                        }
-                        showPanel()
-                    }
+                    )
                 } else {
                     val lineOnly = isLineOnlySwitch(id)
-                    val showLine = lineOnly || id == "wifi"
+                    val showLine = lineOnly || id == "wifi" || id == "battery"
                     toolButton(
                         PanelConfig.settingLabel(this, id),
                         if (lineOnly) "" else QuickActions.panelStatus(this, id),
@@ -174,7 +185,9 @@ class FloatingPanelService : Service() {
             item.startsWith(PanelConfig.PREFIX_APP) -> {
                 val packageName = item.removePrefix(PanelConfig.PREFIX_APP)
                 toolButton("", PanelConfig.appLabel(this, packageName), R.drawable.ic_apps, iconDrawable = appIcon(packageName)) {
-                    if (!QuickActions.launchApp(this, packageName)) {
+                    if (QuickActions.launchApp(this, packageName)) {
+                        stopSelf()
+                    } else {
                         Toast.makeText(this, R.string.action_failed, Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -199,31 +212,68 @@ class FloatingPanelService : Service() {
         iconRes: Int,
         accentColor: Int,
         progress: Int,
+        maxProgress: Int,
         showAccentLine: Boolean,
-        onProgress: (Int) -> Unit,
-        action: () -> Unit
+        progressText: (Int) -> String,
+        currentProgress: () -> Int,
+        onProgress: (Int) -> Int
     ): LinearLayout =
-        baseToolButton(title, status, iconRes, accentColor, null, textBesideIcon = true, showAccentLine = showAccentLine, action = action).apply {
+        baseToolButton(title, status, iconRes, accentColor, null, textBesideIcon = true, showAccentLine = showAccentLine, clickable = false).apply {
+            val statusText = firstTextView(this)
             setPadding(dp(14), dp(8), dp(14), dp(8))
             addView(SeekBar(this@FloatingPanelService).apply {
-                max = 100
+                max = maxProgress
                 minHeight = dp(48)
                 setPadding(0, dp(4), 0, 0)
-                this.progress = progress.coerceIn(0, 100)
+                this.progress = progress.coerceIn(0, maxProgress)
+                progressTintList = ColorStateList.valueOf(0xFFD7F57A.toInt())
+                progressBackgroundTintList = ColorStateList.valueOf(0x668EA2AD.toInt())
+                thumbTintList = ColorStateList.valueOf(0xFFD7F57A.toInt())
+                splitTrack = false
+                var lastApplied = progress.coerceIn(0, maxProgress)
+                setOnTouchListener { seek, event ->
+                    seek.parent?.requestDisallowInterceptTouchEvent(true)
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        actionLayerView?.visibility = View.GONE
+                        lastApplied = currentProgress().coerceIn(0, max)
+                        this.progress = lastApplied
+                        statusText?.text = progressText(lastApplied)
+                        DebugLog.write(this@FloatingPanelService, "slider start title=$title progress=${this.progress}")
+                    }
+                    false
+                }
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, value: Int, fromUser: Boolean) {
-                        if (fromUser) onProgress(value)
+                        if (fromUser) {
+                            onProgress(value)
+                            lastApplied = value
+                            statusText?.text = progressText(lastApplied)
+                        }
                     }
 
                     override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
 
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        val progressValue = seekBar?.progress ?: progress
+                        lastApplied = progressValue
+                        statusText?.text = progressText(lastApplied)
+                        DebugLog.write(this@FloatingPanelService, "slider stop title=$title applied=$lastApplied progress=${seekBar?.progress}")
+                    }
                 })
             }, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ))
         }
+
+    private fun firstTextView(view: View): TextView? {
+        if (view is TextView) return view
+        if (view !is ViewGroup) return null
+        for (i in 0 until view.childCount) {
+            firstTextView(view.getChildAt(i))?.let { return it }
+        }
+        return null
+    }
 
     private fun baseToolButton(
         title: String,
@@ -233,7 +283,8 @@ class FloatingPanelService : Service() {
         iconDrawable: Drawable?,
         textBesideIcon: Boolean = false,
         showAccentLine: Boolean = false,
-        action: () -> Unit
+        clickable: Boolean = true,
+        action: () -> Unit = {}
     ): LinearLayout =
         LinearLayout(this).apply {
             val hasIcon = iconDrawable != null || iconRes != 0
@@ -243,7 +294,7 @@ class FloatingPanelService : Service() {
             setPadding(dp(8), dp(6), dp(8), dp(6))
             background = toolBackground()
             contentDescription = listOf(title, status).filter { it.isNotBlank() }.joinToString(" ")
-            isClickable = true
+            isClickable = clickable
             if (hasIcon && textBesideIcon) {
                 addView(LinearLayout(this@FloatingPanelService).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -280,7 +331,12 @@ class FloatingPanelService : Service() {
                     topMargin = dp(5)
                 })
             }
-            setOnClickListener { action() }
+            if (clickable) {
+                setOnClickListener {
+                    DebugLog.write(this@FloatingPanelService, "button click title=$title status=$status")
+                    action()
+                }
+            }
         }
 
     private fun LinearLayout.addIcon(
@@ -324,7 +380,7 @@ class FloatingPanelService : Service() {
     }
 
     private fun isLineOnlySwitch(id: String): Boolean =
-        id == "rotation" || id == "sync" || id == "torch" || id == "bluetooth" || id == "location"
+        id == "rotation" || id == "sync" || id == "torch" || id == "bluetooth" || id == "location" || id == "hotspot" || id == "nfc"
 
     private fun deleteBall(): ImageView =
         ImageView(this).apply {
@@ -356,6 +412,7 @@ class FloatingPanelService : Service() {
             val params = target.layoutParams as FrameLayout.LayoutParams
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    if (isSliderControlTouch(target, event.x, event.y)) return@setOnTouchListener false
                     downRawX = event.rawX
                     downRawY = event.rawY
                     startX = params.leftMargin
@@ -364,6 +421,7 @@ class FloatingPanelService : Service() {
                     editMode = false
                     longPress = Runnable {
                         editMode = true
+                        DebugLog.write(this, "drag edit key=$key")
                         actionLayer.visibility = View.VISIBLE
                         actionLayer.bringToFront()
                     }
@@ -387,6 +445,7 @@ class FloatingPanelService : Service() {
                     target.removeCallbacks(longPress)
                     actionLayer.visibility = View.GONE
                     if (editMode && isOver(deleteTarget, event.rawX, event.rawY)) {
+                        DebugLog.write(this, "drag delete key=$key")
                         PanelConfig.removeAt(this, index)
                         showPanel()
                     } else if (moved) {
@@ -394,7 +453,7 @@ class FloatingPanelService : Service() {
                         val movingSpan = spanFor(PanelConfig.items(this)[index], grid)
                         val targetCell = cellFor(params.leftMargin, params.topMargin, workspace.width, workspace.height, grid, movingSpan)
                         val targetCells = cellsFor(targetCell, movingSpan)
-                        val occupied = occupiedItemCells(index, target.width, target.height, workspace.width, workspace.height)
+                        val occupied = occupiedItemCells(index, workspace.width, workspace.height)
                         val hitItems = occupied.filter { it.cells.any { cell -> cell in targetCells } }
                         val snapped = positionForCell(targetCell, target.width, target.height, workspace.width, workspace.height, grid)
                         if (hitItems.isNotEmpty()) {
@@ -404,8 +463,8 @@ class FloatingPanelService : Service() {
                             used += targetCells
                             hitItems.forEach { hitItem ->
                                 used.removeAll(hitItem.cells)
-                                val freeCell = nearestFreeCell(targetCell, grid, hitItem.span, used)
-                                val displaced = positionForCell(freeCell ?: hitItem.origin, target.width, target.height, workspace.width, workspace.height, grid)
+                                val freeCell = nextFreeCell(hitItem.origin, grid, hitItem.span, used)
+                                val displaced = positionForCell(freeCell ?: hitItem.origin, hitItem.width, hitItem.height, workspace.width, workspace.height, grid)
                                 PanelConfig.savePosition(this, hitItem.key, displaced.x, displaced.y)
                                 used += cellsFor(freeCell ?: hitItem.origin, hitItem.span)
                             }
@@ -414,6 +473,7 @@ class FloatingPanelService : Service() {
                         params.topMargin = snapped.y
                         target.layoutParams = params
                         PanelConfig.savePosition(this, key, snapped.x, snapped.y)
+                        DebugLog.write(this, "drag move key=$key x=${snapped.x} y=${snapped.y} displaced=${hitItems.size}")
                         if (hitItems.isNotEmpty()) showPanel()
                     } else if (!editMode) {
                         target.performClick()
@@ -430,6 +490,30 @@ class FloatingPanelService : Service() {
         }
     }
 
+    private fun isTouchInsideSeekBar(view: View, x: Float, y: Float): Boolean {
+        if (view is SeekBar) return x >= -dp(12) && x <= view.width + dp(12) && y >= -dp(28) && y <= view.height + dp(28)
+        if (view !is ViewGroup) return false
+        for (i in 0 until view.childCount) {
+            val child = view.getChildAt(i)
+            if (child.visibility == View.VISIBLE && isTouchInsideSeekBar(child, x - child.left, y - child.top)) return true
+        }
+        return false
+    }
+
+    private fun isSliderControlTouch(view: View, x: Float, y: Float): Boolean {
+        if (!hasSeekBar(view)) return false
+        return isTouchInsideSeekBar(view, x, y) || y >= view.height * 0.45f
+    }
+
+    private fun hasSeekBar(view: View): Boolean {
+        if (view is SeekBar) return true
+        if (view !is ViewGroup) return false
+        for (i in 0 until view.childCount) {
+            if (hasSeekBar(view.getChildAt(i))) return true
+        }
+        return false
+    }
+
     private fun isOver(view: View, rawX: Float, rawY: Float): Boolean {
         val location = IntArray(2)
         view.getLocationOnScreen(location)
@@ -443,7 +527,7 @@ class FloatingPanelService : Service() {
         val grid = PanelConfig.grid(this)
         val x = dp(8) + index % grid.columns * (width + dp(8))
         val y = dp(8) + index / grid.columns * (height + dp(8))
-        return snapPosition(min(x, panelWidth() - width - dp(16)), y, width, height, span = span, grid = grid)
+        return snapPosition(min(x, panelWorkspaceWidth() - width), y, width, height, span = span, grid = grid)
     }
 
     private fun snapPosition(
@@ -451,8 +535,8 @@ class FloatingPanelService : Service() {
         y: Int,
         width: Int,
         height: Int,
-        workspaceWidth: Int = panelWidth() - dp(16),
-        workspaceHeight: Int = panelHeight() - dp(96),
+        workspaceWidth: Int = panelWorkspaceWidth(),
+        workspaceHeight: Int = panelWorkspaceHeight(),
         span: Span = Span(1, 1),
         grid: PanelConfig.Grid = PanelConfig.grid(this)
     ): PanelConfig.Position {
@@ -464,8 +548,8 @@ class FloatingPanelService : Service() {
         y: Int,
         width: Int,
         height: Int,
-        workspaceWidth: Int = panelWidth() - dp(16),
-        workspaceHeight: Int = panelHeight() - dp(96),
+        workspaceWidth: Int = panelWorkspaceWidth(),
+        workspaceHeight: Int = panelWorkspaceHeight(),
         span: Span = Span(1, 1),
         grid: PanelConfig.Grid = PanelConfig.grid(this),
         usedCells: Set<Pair<Int, Int>>
@@ -475,18 +559,13 @@ class FloatingPanelService : Service() {
         val cell = if (targetCells.none { it in usedCells }) {
             target
         } else {
-            gridOrigins(grid, span)
-                .filter { origin -> cellsFor(origin, span).none { it in usedCells } }
-                .minByOrNull { abs(it.first - target.first) + abs(it.second - target.second) }
-                ?: target
+            nextFreeCell(target, grid, span, usedCells) ?: target
         }
         return positionForCell(cell, width, height, workspaceWidth, workspaceHeight, grid)
     }
 
     private fun occupiedItemCells(
         skipIndex: Int,
-        width: Int,
-        height: Int,
         workspaceWidth: Int,
         workspaceHeight: Int
     ): List<ItemCell> {
@@ -495,35 +574,36 @@ class FloatingPanelService : Service() {
             if (index == skipIndex) return@mapIndexedNotNull null
             val key = "$index:$item"
             val span = spanFor(item, grid)
-            val position = PanelConfig.position(this, key) ?: defaultPosition(index, width, height, span)
+            val size = itemSize(span, grid, workspaceWidth, workspaceHeight)
+            val position = PanelConfig.position(this, key) ?: defaultPosition(index, size.first, size.second, span)
             val origin = cellFor(position.x, position.y, workspaceWidth, workspaceHeight, grid, span)
-            ItemCell(key, origin, span, cellsFor(origin, span))
+            ItemCell(key, origin, span, size.first, size.second, cellsFor(origin, span))
         }
     }
 
-    private fun nearestFreeCell(
-        target: Pair<Int, Int>,
+    private fun nextFreeCell(
+        origin: Pair<Int, Int>,
         grid: PanelConfig.Grid,
         span: Span,
         usedCells: Set<Pair<Int, Int>>
-    ): Pair<Int, Int>? =
-        gridOrigins(grid, span)
-            .filter { origin -> cellsFor(origin, span).none { it in usedCells } }
-            .minByOrNull { abs(it.first - target.first) + abs(it.second - target.second) }
+    ): Pair<Int, Int>? {
+        val origins = gridOrigins(grid, span)
+        val start = origins.indexOfFirst { it == origin }.takeIf { it >= 0 } ?: 0
+        return (origins.drop(start + 1) + origins.take(start))
+            .firstOrNull { candidate -> cellsFor(candidate, span).none { it in usedCells } }
+    }
 
     private fun cellFor(
         x: Int,
         y: Int,
-        workspaceWidth: Int = panelWidth() - dp(16),
-        workspaceHeight: Int = panelHeight() - dp(96),
+        workspaceWidth: Int = panelWorkspaceWidth(),
+        workspaceHeight: Int = panelWorkspaceHeight(),
         grid: PanelConfig.Grid = PanelConfig.grid(this),
         span: Span = Span(1, 1)
     ): Pair<Int, Int> {
-        val edge = dp(8)
-        val stepX = max(1, (workspaceWidth - edge * 2) / grid.columns)
-        val stepY = max(1, (workspaceHeight - edge * 2) / grid.rows)
-        val column = max(0, (x - edge + stepX / 2) / stepX)
-        val row = max(0, (y - edge + stepY / 2) / stepY)
+        val metrics = gridMetrics(grid, workspaceWidth, workspaceHeight)
+        val column = max(0, (x - metrics.edge + metrics.stepX / 2) / metrics.stepX)
+        val row = max(0, (y - metrics.edge + metrics.stepY / 2) / metrics.stepY)
         return column.coerceAtMost(grid.columns - span.columns) to row.coerceAtMost(grid.rows - span.rows)
     }
 
@@ -535,12 +615,10 @@ class FloatingPanelService : Service() {
         workspaceHeight: Int,
         grid: PanelConfig.Grid
     ): PanelConfig.Position {
-        val edge = dp(8)
-        val stepX = max(1, (workspaceWidth - edge * 2) / grid.columns)
-        val stepY = max(1, (workspaceHeight - edge * 2) / grid.rows)
+        val metrics = gridMetrics(grid, workspaceWidth, workspaceHeight)
         return PanelConfig.Position(
-            (edge + cell.first * stepX).coerceIn(0, max(0, workspaceWidth - width)),
-            (edge + cell.second * stepY).coerceIn(0, max(0, workspaceHeight - height))
+            (metrics.edge + cell.first * metrics.stepX).coerceIn(0, max(0, workspaceWidth - width)),
+            (metrics.edge + cell.second * metrics.stepY).coerceIn(0, max(0, workspaceHeight - height))
         )
     }
 
@@ -559,22 +637,30 @@ class FloatingPanelService : Service() {
         }.toSet()
 
     private fun gridOrigins(grid: PanelConfig.Grid, span: Span): List<Pair<Int, Int>> =
-        (0..(grid.columns - span.columns)).flatMap { column ->
-            (0..(grid.rows - span.rows)).map { row -> column to row }
+        (0..(grid.rows - span.rows)).flatMap { row ->
+            (0..(grid.columns - span.columns)).map { column -> column to row }
         }
 
-    private fun itemSize(span: Span, grid: PanelConfig.Grid): Pair<Int, Int> {
-        val workspaceWidth = panelWidth() - dp(16)
-        val workspaceHeight = panelHeight() - dp(96)
+    private fun itemSize(
+        span: Span,
+        grid: PanelConfig.Grid,
+        workspaceWidth: Int = panelWorkspaceWidth(),
+        workspaceHeight: Int = panelWorkspaceHeight()
+    ): Pair<Int, Int> {
+        val metrics = gridMetrics(grid, workspaceWidth, workspaceHeight)
+        if (span.columns > 1) {
+            return (metrics.cellWidth * span.columns + metrics.gap * (span.columns - 1)) to metrics.cellHeight
+        }
+        return metrics.cellWidth to metrics.cellHeight
+    }
+
+    private fun gridMetrics(grid: PanelConfig.Grid, workspaceWidth: Int, workspaceHeight: Int): GridMetrics {
         val edge = dp(8)
         val gap = dp(8)
-        val cellWidth = (workspaceWidth - edge * 2 - gap * (grid.columns - 1)) / grid.columns
-        val cellHeight = (workspaceHeight - edge * 2 - gap * (grid.rows - 1)) / grid.rows
-        val rowHeight = min(cellHeight, dp(132)).coerceAtLeast(dp(96))
-        if (span.columns > 1) {
-            return (cellWidth * span.columns + gap * (span.columns - 1)) to rowHeight
-        }
-        return cellWidth to rowHeight
+        val cellWidth = max(1, (workspaceWidth - edge * 2 - gap * (grid.columns - 1)) / grid.columns)
+        val rawCellHeight = max(1, (workspaceHeight - edge * 2 - gap * (grid.rows - 1)) / grid.rows)
+        val cellHeight = min(rawCellHeight, dp(132)).coerceAtLeast(dp(96))
+        return GridMetrics(edge, gap, cellWidth, cellHeight)
     }
 
     private fun toolBackground() = GradientDrawable().apply {
@@ -593,12 +679,28 @@ class FloatingPanelService : Service() {
 
     private fun panelHeight(): Int = resources.displayMetrics.heightPixels - dp(104)
 
+    private fun panelWorkspaceWidth(): Int = panelWidth() - dp(16)
+
+    private fun panelWorkspaceHeight(): Int = panelHeight() - dp(72)
+
     private data class Span(val columns: Int, val rows: Int)
+
+    private data class GridMetrics(
+        val edge: Int,
+        val gap: Int,
+        val cellWidth: Int,
+        val cellHeight: Int
+    ) {
+        val stepX: Int = cellWidth + gap
+        val stepY: Int = cellHeight + gap
+    }
 
     private data class ItemCell(
         val key: String,
         val origin: Pair<Int, Int>,
         val span: Span,
+        val width: Int,
+        val height: Int,
         val cells: Set<Pair<Int, Int>>
     )
 }

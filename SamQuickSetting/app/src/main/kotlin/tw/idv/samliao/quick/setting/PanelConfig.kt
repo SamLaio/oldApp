@@ -9,6 +9,7 @@ object PanelConfig {
     private const val KEY_ITEMS = "items"
     private const val KEY_BACKGROUND = "background"
     private const val KEY_GRID = "grid"
+    private const val KEY_LOCKED = "locked"
     private const val KEY_X = "_x"
     private const val KEY_Y = "_y"
 
@@ -22,11 +23,13 @@ object PanelConfig {
         Setting("wifi", R.string.open_wifi_settings),
         Setting("bluetooth", R.string.open_bluetooth_settings),
         Setting("location", R.string.open_location_settings),
-        Setting("hotspot", R.string.open_hotspot_settings)
+        Setting("hotspot", R.string.open_hotspot_settings),
+        Setting("nfc", R.string.open_nfc_settings)
     )
 
     val indicators = listOf(
-        Setting("storage", R.string.action_storage)
+        Setting("storage", R.string.action_storage),
+        Setting("battery", R.string.action_battery)
     )
 
     val tools = listOf(
@@ -102,6 +105,17 @@ object PanelConfig {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_GRID, id)
+            .apply()
+    }
+
+    fun isLocked(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_LOCKED, false)
+
+    fun setLocked(context: Context, locked: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_LOCKED, locked)
             .apply()
     }
 
