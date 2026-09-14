@@ -1,11 +1,14 @@
 package tw.idv.samliao.quick.setting
 
 import android.content.Context
+import android.content.SharedPreferences
 
 object PanelConfig {
     const val PREFIX_SETTING = "setting:"
     const val PREFIX_APP = "app:"
     private const val PREFS = "panel_config"
+    private const val KEY_ACTIVE_PANEL = "active_panel"
+    private const val KEY_PANEL_COUNT = "panel_count"
     private const val KEY_ITEMS = "items"
     private const val KEY_BACKGROUND = "background"
     private const val KEY_GRID = "grid"
@@ -53,12 +56,23 @@ object PanelConfig {
         Grid("5x6", R.string.grid_5x6, 5, 6)
     )
 
-    fun items(context: Context): List<String> =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_ITEMS, "")
+    fun activePanel(context: Context): Int {
+        val prefs = prefs(context)
+        return prefs.getInt(KEY_ACTIVE_PANEL, 1).coerceIn(1, panelCount(context))
+    }
+
+    fun panelCount(context: Context): Int {
+        val prefs = prefs(context)
+        return prefs.getInt(KEY_PANEL_COUNT, 1).coerceAtLeast(1)
+    }
+
+    fun items(context: Context): List<String> {
+        val prefs = prefs(context)
+        return prefs.getString(panelKey(activePanel(context), KEY_ITEMS), "")
             .orEmpty()
             .split("\n")
             .filter { it.startsWith(PREFIX_SETTING) || it.startsWith(PREFIX_APP) }
+    }
 
     fun addSetting(context: Context, id: String) = save(context, items(context) + "$PREFIX_SETTING$id")
 
@@ -83,53 +97,55 @@ object PanelConfig {
     }
 
     fun background(context: Context): Background {
-        val id = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_BACKGROUND, backgrounds.first().id)
+        val prefs = prefs(context)
+        val id = prefs.getString(panelKey(activePanel(context), KEY_BACKGROUND), backgrounds.first().id)
         return backgrounds.firstOrNull { it.id == id } ?: backgrounds.first()
     }
 
     fun setBackground(context: Context, id: String) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs(context)
             .edit()
-            .putString(KEY_BACKGROUND, id)
+            .putString(panelKey(activePanel(context), KEY_BACKGROUND), id)
             .apply()
     }
 
     fun grid(context: Context): Grid {
-        val id = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val id = prefs(context)
             .getString(KEY_GRID, grids.first().id)
         return grids.firstOrNull { it.id == id } ?: grids.first()
     }
 
     fun setGrid(context: Context, id: String) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs(context)
             .edit()
             .putString(KEY_GRID, id)
             .apply()
     }
 
     fun isLocked(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs(context)
             .getBoolean(KEY_LOCKED, false)
 
     fun setLocked(context: Context, locked: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs(context)
             .edit()
             .putBoolean(KEY_LOCKED, locked)
             .apply()
     }
 
     fun position(context: Context, key: String): Position? {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.contains(key + KEY_X) || !prefs.contains(key + KEY_Y)) return null
-        return Position(prefs.getInt(key + KEY_X, 0), prefs.getInt(key + KEY_Y, 0))
+        val prefs = prefs(context)
+        val panelKey = panelKey(activePanel(context), key)
+        if (!prefs.contains(panelKey + KEY_X) || !prefs.contains(panelKey + KEY_Y)) return null
+        return Position(prefs.getInt(panelKey + KEY_X, 0), prefs.getInt(panelKey + KEY_Y, 0))
     }
 
     fun savePosition(context: Context, key: String, x: Int, y: Int) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val panelKey = panelKey(activePanel(context), key)
+        prefs(context)
             .edit()
-            .putInt(key + KEY_X, x)
-            .putInt(key + KEY_Y, y)
+            .putInt(panelKey + KEY_X, x)
+            .putInt(panelKey + KEY_Y, y)
             .apply()
     }
 
@@ -143,9 +159,9 @@ object PanelConfig {
         }.getOrElse { packageName }
 
     private fun save(context: Context, items: List<String>) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs(context)
             .edit()
-            .putString(KEY_ITEMS, items.joinToString("\n"))
+            .putString(panelKey(activePanel(context), KEY_ITEMS), items.joinToString("\n"))
             .apply()
     }
 
@@ -161,6 +177,39 @@ object PanelConfig {
     data class Grid(val id: String, val labelRes: Int, val columns: Int, val rows: Int)
 
     data class Position(val x: Int, val y: Int)
+
+    private fun prefs(context: Context): SharedPreferences {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        migrateToPanels(prefs)
+        return prefs
+    }
+
+    private fun migrateToPanels(prefs: SharedPreferences) {
+        if (prefs.contains(KEY_PANEL_COUNT)) return
+
+        val editor = prefs.edit()
+            .putInt(KEY_PANEL_COUNT, 1)
+            .putInt(KEY_ACTIVE_PANEL, 1)
+
+        prefs.getString(KEY_ITEMS, null)?.let {
+            editor.putString(panelKey(1, KEY_ITEMS), it)
+            editor.remove(KEY_ITEMS)
+        }
+        prefs.getString(KEY_BACKGROUND, null)?.let {
+            editor.putString(panelKey(1, KEY_BACKGROUND), it)
+            editor.remove(KEY_BACKGROUND)
+        }
+
+        prefs.all.forEach { (key, value) ->
+            if ((key.endsWith(KEY_X) || key.endsWith(KEY_Y)) && value is Int) {
+                editor.putInt(panelKey(1, key), value)
+                editor.remove(key)
+            }
+        }
+        editor.apply()
+    }
+
+    private fun panelKey(panel: Int, key: String): String = "panel_${panel}_$key"
 
     private fun capacity(grid: Grid): Int = grid.columns * grid.rows
 
