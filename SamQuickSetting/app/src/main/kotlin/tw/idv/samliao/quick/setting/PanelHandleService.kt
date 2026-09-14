@@ -25,23 +25,29 @@ class PanelHandleService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WindowManager::class.java)
-        showHandle()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        removeHandle()
         showHandle()
         return START_STICKY
     }
 
     override fun onDestroy() {
-        handleView?.let { runCatching { windowManager.removeView(it) } }
+        removeHandle()
         super.onDestroy()
+    }
+
+    private fun removeHandle() {
+        handleView?.let { runCatching { windowManager.removeView(it) } }
+        handleView = null
+        handleParams = null
     }
 
     private fun showHandle() {
         if (handleView != null) return
 
-        val width = dp(10)
+        val width = dp(widthDp(this))
         val height = dp(96)
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         val screen = resources.displayMetrics
@@ -149,8 +155,22 @@ class PanelHandleService : Service() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
-        private const val PREFS = "panel_handle"
+        const val PREFS = "panel_handle"
+        private const val DEFAULT_WIDTH_DP = 10
         private const val KEY_RIGHT = "right"
+        private const val KEY_WIDTH_DP = "width_dp"
         private const val KEY_Y_FRACTION = "y_fraction"
+
+        fun widthDp(context: android.content.Context): Int =
+            context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getInt(KEY_WIDTH_DP, DEFAULT_WIDTH_DP)
+                .coerceIn(6, 40)
+
+        fun setWidthDp(context: android.content.Context, widthDp: Int) {
+            context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putInt(KEY_WIDTH_DP, widthDp.coerceIn(6, 40))
+                .apply()
+        }
     }
 }
