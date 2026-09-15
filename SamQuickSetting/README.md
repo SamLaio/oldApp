@@ -6,8 +6,8 @@
 
 - app 名稱：`SamQuickSetting`
 - package / applicationId：`tw.idv.samliao.quick.setting`
-- 版本：`0.5`
-- `versionCode`：`5`
+- 版本：`0.6`
+- `versionCode`：`6`
 - 最低版本：Android 10，`minSdk 29`
 - `targetSdk` / `compileSdk`：`35`
 - 技術：原生 Android Kotlin，無第三方 UI 框架。
@@ -24,6 +24,7 @@
   - 選擇面板背景
   - 選擇格數
   - 鎖定 / 解鎖面板
+  - 開啟 / 關閉 debug log，預設關閉
   - 清空面板內容
 - 側邊條可拖曳，放手後吸附螢幕左右邊，點擊才開啟懸浮面板。
 - 面板資料已改為 `active_panel` / `panel_count` 架構；目前預設只有第一個面板。

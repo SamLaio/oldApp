@@ -19,6 +19,7 @@ class MainActivity : Activity() {
     private lateinit var itemsView: LinearLayout
     private lateinit var storageView: TextView
     private lateinit var lockButton: Button
+    private lateinit var debugLogButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +37,7 @@ class MainActivity : Activity() {
         super.onResume()
         if (::storageView.isInitialized) storageView.text = QuickActions.storageInfo(this)
         if (::lockButton.isInitialized) updateLockButton()
+        if (::debugLogButton.isInitialized) updateDebugLogButton()
     }
 
     private fun createContentView(): View {
@@ -61,6 +63,8 @@ class MainActivity : Activity() {
         root.addView(actionButton(R.string.choose_grid) { chooseGrid() })
         lockButton = actionButton(R.string.lock_panel) { togglePanelLock() }
         root.addView(lockButton)
+        debugLogButton = actionButton(R.string.enable_debug_log) { toggleDebugLog() }
+        root.addView(debugLogButton)
         root.addView(actionButton(R.string.clear_panel) {
             PanelConfig.clear(this)
             refreshPanelItems()
@@ -226,6 +230,15 @@ class MainActivity : Activity() {
 
     private fun updateLockButton() {
         lockButton.text = getString(if (PanelConfig.isLocked(this)) R.string.unlock_panel else R.string.lock_panel)
+    }
+
+    private fun toggleDebugLog() {
+        DebugLog.setEnabled(this, !DebugLog.isEnabled(this))
+        updateDebugLogButton()
+    }
+
+    private fun updateDebugLogButton() {
+        debugLogButton.text = getString(if (DebugLog.isEnabled(this)) R.string.disable_debug_log else R.string.enable_debug_log)
     }
 
     private fun openFloatingPanel() {

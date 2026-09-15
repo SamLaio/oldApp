@@ -9,9 +9,22 @@ import java.util.Date
 import java.util.Locale
 
 object DebugLog {
+    private const val PREFS = "debug_log"
+    private const val KEY_ENABLED = "enabled"
     private const val FILE_NAME = "quick_log.txt"
 
+    fun isEnabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, false)
+
+    fun setEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_ENABLED, enabled)
+            .apply()
+    }
+
     fun write(context: Context, message: String) {
+        if (!isEnabled(context)) return
         runCatching {
             val line = "${SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())} $message\n"
             val resolver = context.contentResolver
