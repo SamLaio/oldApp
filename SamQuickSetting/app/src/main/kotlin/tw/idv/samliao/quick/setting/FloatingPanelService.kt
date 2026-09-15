@@ -17,6 +17,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -58,7 +59,7 @@ class FloatingPanelService : Service() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(8), dp(8), dp(8), dp(8))
-            setBackground(null)
+            setBackground(if (isLandscape()) getDrawable(background.drawableRes) else null)
         }
 
         val workspace = FrameLayout(this).apply {
@@ -73,10 +74,14 @@ class FloatingPanelService : Service() {
             })
         }
         actionLayerView = actionLayer
-        root.addView(
-            workspace,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
-        )
+        if (isLandscape()) {
+            root.orientation = LinearLayout.HORIZONTAL
+            root.addView(workspaceContainer(workspace), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
+                rightMargin = dp(6)
+            })
+        } else {
+            root.addView(workspaceContainer(workspace), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
 
         val usedCells = mutableSetOf<Pair<Int, Int>>()
         PanelConfig.items(this).forEachIndexed { index, item ->
@@ -101,20 +106,12 @@ class FloatingPanelService : Service() {
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         )
 
-        root.addView(
-            LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                addView(toolButton(getString(R.string.settings_panel), "", action = ::openSettings), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
-                    rightMargin = dp(4)
-                })
-                addView(toolButton(getString(R.string.close_panel), "", action = ::stopSelf), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
-                    leftMargin = dp(4)
-                })
-            },
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
-                topMargin = dp(8)
-            }
-        )
+        val tools = LinearLayout(this).apply {
+            orientation = if (isLandscape()) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            addView(toolButton(getString(R.string.settings_panel), "", action = ::openSettings), toolButtonParams(first = true))
+            addView(toolButton(getString(R.string.close_panel), "", action = ::stopSelf), toolButtonParams(first = false))
+        }
+        root.addView(tools, toolPanelParams())
 
         val params = WindowManager.LayoutParams(
             panelWidth(),
@@ -177,6 +174,7 @@ class FloatingPanelService : Service() {
                     ) {
                         if (!QuickActions.run(this, id)) {
                             Toast.makeText(this, R.string.action_failed, Toast.LENGTH_SHORT).show()
+                            return@toolButton
                         }
                         showPanel()
                     }
@@ -291,6 +289,8 @@ class FloatingPanelService : Service() {
             val displayText = if (status.isNotBlank() || hasIcon) status else title
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
+            clipChildren = false
+            clipToPadding = false
             setPadding(dp(8), dp(6), dp(8), dp(6))
             background = toolBackground()
             contentDescription = listOf(title, status).filter { it.isNotBlank() }.joinToString(" ")
@@ -675,13 +675,55 @@ class FloatingPanelService : Service() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    private fun panelWidth(): Int = resources.displayMetrics.widthPixels - dp(28)
+    private fun toolButtonParams(first: Boolean): LinearLayout.LayoutParams =
+        if (isLandscape()) {
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+                if (first) bottomMargin = dp(4) else topMargin = dp(4)
+            }
+        } else {
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
+                if (first) rightMargin = dp(4) else leftMargin = dp(4)
+            }
+        }
 
-    private fun panelHeight(): Int = resources.displayMetrics.heightPixels - dp(104)
+    private fun toolPanelParams(): LinearLayout.LayoutParams =
+        if (isLandscape()) {
+            LinearLayout.LayoutParams(dp(96), LinearLayout.LayoutParams.MATCH_PARENT)
+        } else {
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
+                topMargin = dp(8)
+            }
+        }
 
-    private fun panelWorkspaceWidth(): Int = panelWidth() - dp(16)
+    private fun panelWidth(): Int =
+        resources.displayMetrics.widthPixels - if (isLandscape()) dp(152) else dp(28)
 
-    private fun panelWorkspaceHeight(): Int = panelHeight() - dp(72)
+    private fun panelHeight(): Int =
+        resources.displayMetrics.heightPixels - if (isLandscape()) dp(88) else dp(104)
+
+    private fun isLandscape(): Boolean =
+        resources.displayMetrics.widthPixels > resources.displayMetrics.heightPixels
+
+    private fun panelWorkspaceWidth(): Int =
+        panelWidth() - dp(16) - if (isLandscape()) dp(102) else 0
+
+    private fun workspaceContainer(workspace: FrameLayout): View =
+        if (isLandscape()) {
+            ScrollView(this).apply {
+                isFillViewport = false
+                addView(workspace, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, panelWorkspaceHeight()))
+            }
+        } else {
+            workspace
+        }
+
+    private fun panelWorkspaceHeight(): Int {
+        if (!isLandscape()) return panelHeight() - dp(72)
+        val grid = PanelConfig.grid(this)
+        val edge = dp(8)
+        val gap = dp(8)
+        return edge * 2 + gap * (grid.rows - 1) + dp(96) * grid.rows
+    }
 
     private data class Span(val columns: Int, val rows: Int)
 

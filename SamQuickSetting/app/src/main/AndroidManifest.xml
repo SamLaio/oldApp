@@ -58,6 +58,7 @@
 
         <service
             android:name=".PanelHandleService"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden"
             android:exported="false" />
 
     </application>

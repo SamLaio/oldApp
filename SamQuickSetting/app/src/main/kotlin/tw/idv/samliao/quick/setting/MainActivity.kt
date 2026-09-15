@@ -54,6 +54,7 @@ class MainActivity : Activity() {
         root.addView(actionButton(R.string.open_floating_panel) { openFloatingPanel() })
         root.addView(actionButton(R.string.show_edge_handle) { showEdgeHandle() })
         root.addView(actionButton(R.string.edge_handle_width) { chooseEdgeHandleWidth() })
+        root.addView(actionButton(R.string.edge_handle_length) { chooseEdgeHandleLength() })
         root.addView(actionButton(R.string.choose_tool) { chooseToolGroup() })
         root.addView(actionButton(R.string.add_app_shortcut) { chooseAppShortcut() })
         root.addView(actionButton(R.string.choose_background) { chooseBackground() })
@@ -255,6 +256,23 @@ class MainActivity : Activity() {
             .setSingleChoiceItems(labels, checked) { dialog, index ->
                 PanelHandleService.setWidthDp(this, widths[index])
                 DebugLog.write(this, "settings edge handle width=${widths[index]}")
+                if (QuickActions.canDrawOverlays(this)) {
+                    startService(Intent(this, PanelHandleService::class.java))
+                }
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun chooseEdgeHandleLength() {
+        val lengths = intArrayOf(64, 80, 96, 120, 144, 180)
+        val labels = lengths.map { "${it} dp" }.toTypedArray()
+        val checked = lengths.indexOf(PanelHandleService.lengthDp(this))
+        AlertDialog.Builder(this)
+            .setTitle(R.string.edge_handle_length)
+            .setSingleChoiceItems(labels, checked) { dialog, index ->
+                PanelHandleService.setLengthDp(this, lengths[index])
+                DebugLog.write(this, "settings edge handle length=${lengths[index]}")
                 if (QuickActions.canDrawOverlays(this)) {
                     startService(Intent(this, PanelHandleService::class.java))
                 }

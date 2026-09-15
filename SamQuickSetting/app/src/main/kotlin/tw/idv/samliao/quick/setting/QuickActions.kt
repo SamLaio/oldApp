@@ -29,23 +29,28 @@ object QuickActions {
 
     fun run(context: Context, id: String): Boolean {
         DebugLog.write(context, "run action=$id")
-        val result = when (id) {
-            "brightness" -> toggleBrightness(context)
-            "volume" -> cycleVolume(context).let { true }
-            "ringer" -> toggleRinger(context).let { true }
-            "timeout" -> cycleScreenTimeout(context)
-            "rotation" -> toggleAutoRotate(context)
-            "sync" -> toggleAutoSync().let { true }
-            "torch" -> toggleTorch(context)
-            "app" -> launchSelectedApp(context)
-            "wifi" -> openWifi(context).let { true }
-            "bluetooth" -> openBluetooth(context).let { true }
-            "location" -> openLocation(context).let { true }
-            "hotspot" -> openHotspot(context).let { true }
-            "nfc" -> openNfc(context).let { true }
-            "storage" -> Toast.makeText(context, storageInfo(context), Toast.LENGTH_LONG).show().let { true }
-            "battery" -> Toast.makeText(context, batteryStatus(context), Toast.LENGTH_LONG).show().let { true }
-            else -> false
+        val result = runCatching {
+            when (id) {
+                "brightness" -> toggleBrightness(context)
+                "volume" -> cycleVolume(context).let { true }
+                "ringer" -> toggleRinger(context)
+                "timeout" -> cycleScreenTimeout(context)
+                "rotation" -> toggleAutoRotate(context)
+                "sync" -> toggleAutoSync().let { true }
+                "torch" -> toggleTorch(context)
+                "app" -> launchSelectedApp(context)
+                "wifi" -> openWifi(context).let { true }
+                "bluetooth" -> openBluetooth(context).let { true }
+                "location" -> openLocation(context).let { true }
+                "hotspot" -> openHotspot(context).let { true }
+                "nfc" -> openNfc(context).let { true }
+                "storage" -> Toast.makeText(context, storageInfo(context), Toast.LENGTH_LONG).show().let { true }
+                "battery" -> Toast.makeText(context, batteryStatus(context), Toast.LENGTH_LONG).show().let { true }
+                else -> false
+            }
+        }.getOrElse {
+            DebugLog.write(context, "run action=$id error=${it.javaClass.simpleName}:${it.message}")
+            false
         }
         DebugLog.write(context, "run action=$id result=$result")
         return result
@@ -180,13 +185,21 @@ object QuickActions {
         return actual
     }
 
-    fun toggleRinger(context: Context) {
+    fun toggleRinger(context: Context): Boolean {
         val audio = context.getSystemService(AudioManager::class.java)
-        audio.ringerMode = if (audio.ringerMode == AudioManager.RINGER_MODE_NORMAL) {
+        val before = audio.ringerMode
+        val target = if (before == AudioManager.RINGER_MODE_NORMAL) {
             AudioManager.RINGER_MODE_VIBRATE
         } else {
             AudioManager.RINGER_MODE_NORMAL
         }
+        audio.ringerMode = target
+        if (target == AudioManager.RINGER_MODE_NORMAL) {
+            audio.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0)
+        }
+        val actual = audio.ringerMode
+        DebugLog.write(context, "ringer toggle before=$before target=$target actual=$actual")
+        return actual == target
     }
 
     fun toggleAutoSync() {

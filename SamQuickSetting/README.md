@@ -6,8 +6,8 @@
 
 - app 名稱：`SamQuickSetting`
 - package / applicationId：`tw.idv.samliao.quick.setting`
-- 版本：`0.4`
-- `versionCode`：`4`
+- 版本：`0.5`
+- `versionCode`：`5`
 - 最低版本：Android 10，`minSdk 29`
 - `targetSdk` / `compileSdk`：`35`
 - 技術：原生 Android Kotlin，無第三方 UI 框架。
@@ -18,6 +18,7 @@
 - 設定頁可：
   - 開啟懸浮面板
   - 顯示側邊條
+  - 設定側邊條寬度與長度
   - 加入設定鈕
   - 加入 app 捷徑
   - 選擇面板背景

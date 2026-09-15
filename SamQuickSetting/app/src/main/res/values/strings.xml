@@ -4,6 +4,7 @@
     <string name="open_floating_panel">開啟懸浮面板</string>
     <string name="show_edge_handle">顯示側邊條</string>
     <string name="edge_handle_width">側邊條寬度</string>
+    <string name="edge_handle_length">側邊條長度</string>
     <string name="shortcut_open_panel_short">開面板</string>
     <string name="shortcut_open_panel_long">開啟懸浮面板</string>
     <string name="settings_done">確定</string>
