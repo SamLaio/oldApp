@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">SamAppOrganizer</string>
+    <string name="app_summary">用資料夾關鍵字自動整理已安裝 app。</string>
+</resources>

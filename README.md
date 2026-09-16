@@ -10,6 +10,7 @@
 | `findPacket/` | findPacket | `com.samliao.findpacket` | `0.5` | Android 10 | 包裹查詢 app，使用官方物流頁、內建 WebView、自動填單號、查詢歷史 |
 | `SamMiniCam/` | SamMiniCam | `cam.sam.minicam` | `0.1` | Android 10 | Canon Mini Cam / FV-100 硬體連線測試 app，尚未完整移植拍照與媒體管理 |
 | `SamQuickSetting/` | SamQuickSetting | `tw.idv.samliao.quick.setting` | `0.3` | Android 10 | 懸浮快速設定面板 app，可放設定鈕、滑桿、app 捷徑與側邊條 |
+| `SamAppOrganizer/` | SamAppOrganizer | `tw.idv.samliao.apporganizer` | `0.1` | Android 10 | 用資料夾關鍵字自動整理已安裝 launcher app |
 
 ## 其他資料夾
 
@@ -61,6 +62,7 @@ seClock/README.md
 findPacket/README.md
 SamMiniCam/README.md
 SamQuickSetting/README.md
+SamAppOrganizer/README.md
 ```
 
 `seClock/HANDOFF.md` 是分出去到另一個對話時使用的交接筆記。
