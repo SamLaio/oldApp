@@ -1,4 +1,4 @@
-package com.samliao.seclock
+package tw.idv.samliao.seclock
 
 import android.app.AlarmManager
 import android.app.PendingIntent

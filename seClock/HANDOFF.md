@@ -1,19 +1,19 @@
 # seClock 交接筆記
 
-這份文件用來把 `seClock` 分出去給另一個對話繼續處理。請優先讀本檔、`README.md`、`release/0.1/release-notes.md`，再看程式碼。
+這份文件用來把 `seClock` 分出去給另一個對話繼續處理。請優先讀本檔、`README.md`、`release/0.2/release-notes.md`，再看程式碼。
 
 ## 專案定位
 
 - app 名稱：`seClock`
-- package / applicationId：`com.samliao.seclock`
+- package / applicationId：`tw.idv.samliao.seclock`
 - 來源目標：把舊版「時鐘小工具 白 / 黑」二合一，重建成新的原生 Kotlin Android app。
 - 最低版本：Android 11，`minSdk 30`
-- 目前版本：`versionCode 1`、`versionName 0.1`
+- 目前版本：`versionCode 2`、`versionName 0.2`
 - 目前 release 產物：
 
 ```text
-seClock/release/0.1/release.apk
-seClock/release/0.1/release-notes.md
+seClock/release/0.2/release.apk
+seClock/release/0.2/release-notes.md
 ```
 
 ## 使用者已確認的產品需求
@@ -49,9 +49,9 @@ seClock/release/[版本]/release-notes.md
 ```text
 seClock/app/build.gradle
 seClock/app/src/main/AndroidManifest.xml
-seClock/app/src/main/kotlin/com/samliao/seclock/MainActivity.kt
-seClock/app/src/main/kotlin/com/samliao/seclock/ClockWidgetUpdater.kt
-seClock/app/src/main/kotlin/com/samliao/seclock/*WidgetProvider.kt
+seClock/app/src/main/kotlin/tw/idv/samliao/seclock/MainActivity.kt
+seClock/app/src/main/kotlin/tw/idv/samliao/seclock/ClockWidgetUpdater.kt
+seClock/app/src/main/kotlin/tw/idv/samliao/seclock/*WidgetProvider.kt
 seClock/app/src/main/res/layout/widget_*.xml
 seClock/app/src/main/res/xml/widget_*_info.xml
 seClock/app/src/main/res/values/strings.xml
@@ -167,7 +167,7 @@ seClock/release/[版本]/release.apk
 ```text
 D:\github\oldApp\seClock\HANDOFF.md
 D:\github\oldApp\seClock\README.md
-D:\github\oldApp\seClock\release\0.1\release-notes.md
+D:\github\oldApp\seClock\release\0.2\release-notes.md
 ```
 
 2. 若使用者要調外觀，先看：
@@ -180,6 +180,6 @@ seClock/app/src/main/res/xml/widget_*_info.xml
 3. 若使用者要調設定或點擊行為，先看：
 
 ```text
-seClock/app/src/main/kotlin/com/samliao/seclock/MainActivity.kt
-seClock/app/src/main/kotlin/com/samliao/seclock/ClockWidgetUpdater.kt
+seClock/app/src/main/kotlin/tw/idv/samliao/seclock/MainActivity.kt
+seClock/app/src/main/kotlin/tw/idv/samliao/seclock/ClockWidgetUpdater.kt
 ```

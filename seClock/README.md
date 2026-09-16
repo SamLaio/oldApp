@@ -5,9 +5,9 @@
 ## 現況
 
 - app 名稱：`seClock`
-- package / applicationId：`com.samliao.seclock`
-- 版本：`0.1`
-- `versionCode`：`1`
+- package / applicationId：`tw.idv.samliao.seclock`
+- 版本：`0.2`
+- `versionCode`：`2`
 - 最低版本：Android 11，`minSdk 30`
 - `targetSdk` / `compileSdk`：`35`
 - 技術：原生 Android Kotlin，無第三方 UI 框架。
@@ -46,9 +46,9 @@
 ## 重要檔案
 
 ```text
-app/src/main/kotlin/com/samliao/seclock/MainActivity.kt
-app/src/main/kotlin/com/samliao/seclock/ClockWidgetUpdater.kt
-app/src/main/kotlin/com/samliao/seclock/*WidgetProvider.kt
+app/src/main/kotlin/tw/idv/samliao/seclock/MainActivity.kt
+app/src/main/kotlin/tw/idv/samliao/seclock/ClockWidgetUpdater.kt
+app/src/main/kotlin/tw/idv/samliao/seclock/*WidgetProvider.kt
 app/src/main/res/layout/widget_*.xml
 app/src/main/res/xml/widget_*_info.xml
 app/src/main/res/values/strings.xml

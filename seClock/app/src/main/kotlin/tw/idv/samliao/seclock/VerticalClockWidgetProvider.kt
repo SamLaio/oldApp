@@ -1,4 +1,4 @@
-package com.samliao.seclock
+package tw.idv.samliao.seclock
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider

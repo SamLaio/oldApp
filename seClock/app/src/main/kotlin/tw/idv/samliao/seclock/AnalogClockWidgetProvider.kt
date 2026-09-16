@@ -1,11 +1,11 @@
-package com.samliao.seclock
+package tw.idv.samliao.seclock
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 
-class PlainClockWidgetProvider : AppWidgetProvider() {
+class AnalogClockWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
-        ClockWidgetUpdater.update(context, manager, ids, R.layout.widget_plain)
+        ClockWidgetUpdater.update(context, manager, ids, R.layout.widget_analog)
     }
 }

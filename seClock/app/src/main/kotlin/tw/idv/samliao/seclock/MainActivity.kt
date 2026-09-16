@@ -1,4 +1,4 @@
-package com.samliao.seclock
+package tw.idv.samliao.seclock
 
 import android.app.Activity
 import android.app.AlertDialog
