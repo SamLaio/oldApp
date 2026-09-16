@@ -47,6 +47,7 @@ class PanelHandleService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        setEnabled(this, true)
         refreshHandle()
         return START_STICKY
     }
@@ -199,7 +200,7 @@ class PanelHandleService : Service() {
     private fun snapToEdge(view: View, params: WindowManager.LayoutParams, width: Int, screenWidth: Int, screenHeight: Int) {
         val onRight = params.x + width / 2 >= screenWidth / 2
         params.x = if (onRight) screenWidth - width else 0
-        view.background = handleBackground(onRight)
+        updateVisibleHandle(view, onRight, dp(widthDp(this)))
         windowManager.updateViewLayout(view, params)
         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
             .putBoolean(orientationKey(KEY_RIGHT), onRight)
@@ -214,7 +215,9 @@ class PanelHandleService : Service() {
         }
 
     private fun updateVisibleHandle(view: View, onRight: Boolean, width: Int) {
-        val child = (view as? FrameLayout)?.getChildAt(0) ?: return
+        val frame = view as? FrameLayout ?: return
+        frame.setBackgroundColor(Color.TRANSPARENT)
+        val child = frame.getChildAt(0) ?: return
         child.background = handleBackground(onRight)
         child.layoutParams = visibleHandleParams(onRight, width)
     }
@@ -273,9 +276,21 @@ class PanelHandleService : Service() {
         private const val MIN_TOUCH_WIDTH_DP = 48
         private const val DEFAULT_LENGTH_DP = 96
         private const val KEY_RIGHT = "right"
+        private const val KEY_ENABLED = "enabled"
         private const val KEY_WIDTH_DP = "width_dp"
         private const val KEY_LENGTH_DP = "length_dp"
         private const val KEY_Y_FRACTION = "y_fraction"
+
+        fun isEnabled(context: android.content.Context): Boolean =
+            context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getBoolean(KEY_ENABLED, false)
+
+        fun setEnabled(context: android.content.Context, enabled: Boolean) {
+            context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_ENABLED, enabled)
+                .apply()
+        }
 
         fun widthDp(context: android.content.Context): Int =
             context.getSharedPreferences(PREFS, MODE_PRIVATE)

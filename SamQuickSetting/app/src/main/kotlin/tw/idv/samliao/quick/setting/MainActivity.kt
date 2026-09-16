@@ -38,6 +38,7 @@ class MainActivity : Activity() {
         if (::storageView.isInitialized) storageView.text = QuickActions.storageInfo(this)
         if (::lockButton.isInitialized) updateLockButton()
         if (::debugLogButton.isInitialized) updateDebugLogButton()
+        ensureEdgeHandle()
     }
 
     private fun createContentView(): View {
@@ -257,7 +258,14 @@ class MainActivity : Activity() {
             QuickActions.requestOverlayPermission(this)
             return
         }
-        startService(Intent(this, PanelHandleService::class.java))
+        PanelHandleService.setEnabled(this, true)
+        ensureEdgeHandle()
+    }
+
+    private fun ensureEdgeHandle() {
+        if (PanelHandleService.isEnabled(this) && QuickActions.canDrawOverlays(this)) {
+            startService(Intent(this, PanelHandleService::class.java))
+        }
     }
 
     private fun chooseEdgeHandleWidth() {

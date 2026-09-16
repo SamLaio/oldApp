@@ -6,8 +6,8 @@
 
 - app 名稱：`SamQuickSetting`
 - package / applicationId：`tw.idv.samliao.quick.setting`
-- 版本：`0.6`
-- `versionCode`：`6`
+- 版本：`0.7`
+- `versionCode`：`7`
 - 最低版本：Android 10，`minSdk 29`
 - `targetSdk` / `compileSdk`：`35`
 - 技術：原生 Android Kotlin，無第三方 UI 框架。
