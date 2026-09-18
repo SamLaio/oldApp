@@ -6,7 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organizer.db", null, 2) {
+class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organizer.db", null, 4) {
     override fun onConfigure(db: SQLiteDatabase) {
         db.setForeignKeyConstraintsEnabled(true)
     }
@@ -42,6 +42,7 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
             """.trimIndent()
         )
         createWidgetTable(db)
+        createSettingsTable(db)
         DEFAULT_FOLDERS.forEach { folder ->
             saveFolder(db, folder.id, folder.name, folder.keywords, false, folder.category)
         }
@@ -49,6 +50,7 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createWidgetTable(db)
+        if (oldVersion < 4) createSettingsTable(db)
     }
 
     fun folders(): List<OrganizerFolder> {
@@ -141,6 +143,27 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         writableDatabase.delete("widget_folders", "app_widget_id = ?", arrayOf(appWidgetId.toString()))
     }
 
+    fun iconStyle(): String {
+        readableDatabase.rawQuery(
+            "SELECT value FROM settings WHERE key = ?",
+            arrayOf(FOLDER_ICON_STYLE)
+        ).use { cursor ->
+            return if (cursor.moveToFirst()) cursor.getString(0) else FolderIconStyle.PREVIEW
+        }
+    }
+
+    fun setIconStyle(style: String) {
+        writableDatabase.insertWithOnConflict(
+            "settings",
+            null,
+            ContentValues().apply {
+                put("key", FOLDER_ICON_STYLE)
+                put("value", style)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
     private fun keywordsByFolder(): Map<String, List<String>> {
         val result = linkedMapOf<String, MutableList<String>>()
         readableDatabase.rawQuery(
@@ -154,7 +177,13 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         return result
     }
 
-    private fun saveFolder(id: String, name: String, keywords: List<String>, custom: Boolean, category: Int?) {
+    private fun saveFolder(
+        id: String,
+        name: String,
+        keywords: List<String>,
+        custom: Boolean,
+        category: Int?
+    ) {
         writableDatabase.beginTransaction()
         try {
             saveFolder(writableDatabase, id, name, keywords, custom, category)
@@ -211,7 +240,14 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         )
     }
 
+    private fun createSettingsTable(db: SQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+    }
+
     private companion object {
+        const val FOLDER_ICON_STYLE = "folder_icon_style"
         val DEFAULT_FOLDERS = listOf(
             OrganizerFolder("communication", "通訊", listOf("chat", "message", "messenger", "sms", "mail", "gmail", "line", "telegram", "whatsapp", "signal", "discord", "zoom", "meet", "phone", "contacts"), ApplicationInfo.CATEGORY_SOCIAL, false),
             OrganizerFolder("social", "社群", listOf("facebook", "instagram", "threads", "twitter", "tiktok", "reddit", "plurk", "social"), ApplicationInfo.CATEGORY_SOCIAL, false),

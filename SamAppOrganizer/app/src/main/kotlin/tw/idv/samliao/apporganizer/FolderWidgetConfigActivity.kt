@@ -31,6 +31,7 @@ class FolderWidgetConfigActivity : Activity() {
 
     private fun showFolders() {
         val folders = db.folders() + OrganizerModel.uncategorizedFolder()
+        val iconStyle = db.iconStyle()
         val grouped = OrganizerModel.classify(
             OrganizerModel.loadApps(this),
             db.folders(),
@@ -43,12 +44,12 @@ class FolderWidgetConfigActivity : Activity() {
         }
         root.addView(label("選擇小工具資料夾", 26f, 0xFF202124.toInt(), Gravity.CENTER))
         folders.forEach { folder ->
-            root.addView(folderRow(folder, grouped[folder.id].orEmpty()))
+            root.addView(folderRow(folder, grouped[folder.id].orEmpty(), iconStyle))
         }
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
-    private fun folderRow(folder: OrganizerFolder, apps: List<AppItem>): View =
+    private fun folderRow(folder: OrganizerFolder, apps: List<AppItem>, iconStyle: String): View =
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -65,7 +66,7 @@ class FolderWidgetConfigActivity : Activity() {
                 finish()
             }
             addView(ImageView(this@FolderWidgetConfigActivity).apply {
-                setImageBitmap(folderPreviewBitmap(apps, dp(54)))
+                setImageBitmap(folderPreviewBitmap(apps, dp(54), iconStyle))
                 layoutParams = LinearLayout.LayoutParams(dp(54), dp(54)).apply { rightMargin = dp(12) }
             })
             addView(label("${folder.name} (${apps.size})", 20f, 0xFF202124.toInt(), Gravity.START))

@@ -27,6 +27,7 @@ class MainActivity : Activity() {
         atRoot = true
         val folders = db.folders()
         val grouped = groupedApps(folders)
+        val iconStyle = db.iconStyle()
         val root = rootLayout()
 
         root.addView(label(getString(R.string.app_name), 32f, 0xFF202124.toInt(), Gravity.CENTER))
@@ -47,12 +48,13 @@ class MainActivity : Activity() {
                 }
             })
         })
+        root.addView(actionButton("資料夾風格") { chooseFolderStyle() })
         root.addView(label("長按資料夾可改名稱與關鍵字。", 14f, 0xFF5F6368.toInt(), Gravity.START).apply {
             setPadding(0, dp(14), 0, dp(4))
         })
 
         (folders + OrganizerModel.uncategorizedFolder()).forEach { folder ->
-            root.addView(folderRow(folder, grouped[folder.id].orEmpty()))
+            root.addView(folderRow(folder, grouped[folder.id].orEmpty(), iconStyle))
         }
 
         setContentView(ScrollView(this).apply { addView(root) })
@@ -143,6 +145,22 @@ class MainActivity : Activity() {
         showFolders()
     }
 
+    private fun chooseFolderStyle() {
+        val styles = FolderIconStyle.values
+        AlertDialog.Builder(this)
+            .setTitle("資料夾風格")
+            .setSingleChoiceItems(
+                styles.map(FolderIconStyle::label).toTypedArray(),
+                styles.indexOf(db.iconStyle()).coerceAtLeast(0)
+            ) { dialog, index ->
+                db.setIconStyle(styles[index])
+                FolderWidgetProvider.updateAll(this)
+                dialog.dismiss()
+                showFolders()
+            }
+            .show()
+    }
+
     private fun groupedApps(folders: List<OrganizerFolder>): Map<String, List<AppItem>> =
         OrganizerModel.classify(OrganizerModel.loadApps(this), folders, db.assignments())
 
@@ -152,7 +170,7 @@ class MainActivity : Activity() {
         else startActivity(intent)
     }
 
-    private fun folderRow(folder: OrganizerFolder, apps: List<AppItem>): View =
+    private fun folderRow(folder: OrganizerFolder, apps: List<AppItem>, iconStyle: String): View =
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -165,7 +183,7 @@ class MainActivity : Activity() {
                 true
             }
             addView(ImageView(this@MainActivity).apply {
-                setImageBitmap(folderPreviewBitmap(apps, dp(54)))
+                setImageBitmap(folderPreviewBitmap(apps, dp(54), iconStyle))
                 layoutParams = LinearLayout.LayoutParams(dp(54), dp(54)).apply { rightMargin = dp(12) }
             })
             addView(LinearLayout(this@MainActivity).apply {

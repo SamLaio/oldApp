@@ -29,6 +29,7 @@ class FolderWidgetProvider : AppWidgetProvider() {
         fun updateWidget(context: Context, appWidgetId: Int) {
             val db = AppOrganizerDb(context)
             val folderId = db.widgetFolder(appWidgetId)
+            val iconStyle = db.iconStyle()
             val folders = db.folders()
             val folder = (folders + OrganizerModel.uncategorizedFolder()).firstOrNull { it.id == folderId }
             val apps = if (folder == null) {
@@ -43,7 +44,10 @@ class FolderWidgetProvider : AppWidgetProvider() {
 
             val views = RemoteViews(context.packageName, R.layout.widget_folder_icon)
             views.setTextViewText(R.id.widget_folder_label, folder?.name ?: "資料夾")
-            views.setImageViewBitmap(R.id.widget_folder_icon, folderPreviewBitmap(apps, dp(context, 54)))
+            views.setImageViewBitmap(
+                R.id.widget_folder_icon,
+                folderPreviewBitmap(apps, dp(context, 54), iconStyle)
+            )
             views.setOnClickPendingIntent(R.id.widget_folder_root, folderPendingIntent(context, appWidgetId))
             AppWidgetManager.getInstance(context).updateAppWidget(appWidgetId, views)
         }
