@@ -55,11 +55,10 @@ class MainActivity : Activity() {
         })
 
         root.addView(actionButton(R.string.open_floating_panel) { openFloatingPanel() })
-        root.addView(actionButton(R.string.show_edge_handle) { showEdgeHandle() })
-        root.addView(actionButton(R.string.edge_handle_width) { chooseEdgeHandleWidth() })
-        root.addView(actionButton(R.string.edge_handle_length) { chooseEdgeHandleLength() })
+        root.addView(actionButton(R.string.edge_handle_settings) {
+            startActivity(Intent(this, EdgeHandleSettingsActivity::class.java))
+        })
         root.addView(actionButton(R.string.choose_tool) { chooseToolGroup() })
-        root.addView(actionButton(R.string.add_app_shortcut) { chooseAppShortcut() })
         root.addView(actionButton(R.string.choose_background) { chooseBackground() })
         root.addView(actionButton(R.string.choose_grid) { chooseGrid() })
         lockButton = actionButton(R.string.lock_panel) { togglePanelLock() }
@@ -100,6 +99,7 @@ class MainActivity : Activity() {
         val labels = arrayOf(
             getString(R.string.group_system_settings),
             getString(R.string.group_indicators),
+            getString(R.string.action_app),
             getString(R.string.group_tools)
         )
         AlertDialog.Builder(this)
@@ -108,21 +108,19 @@ class MainActivity : Activity() {
                 when (index) {
                     0 -> chooseSettingButton(R.string.group_system_settings, PanelConfig.systemSettings)
                     1 -> chooseSettingButton(R.string.group_indicators, PanelConfig.indicators)
-                    2 -> chooseTool()
+                    2 -> chooseApplication()
+                    3 -> chooseTool()
                 }
             }
             .show()
     }
 
     private fun chooseTool() {
-        val labels = arrayOf(
-            getString(R.string.add_app_shortcut),
-            getString(R.string.action_torch)
-        )
+        val labels = arrayOf(getString(R.string.action_torch))
         AlertDialog.Builder(this)
             .setTitle(R.string.group_tools)
-            .setItems(labels) { _, index ->
-                if (index == 0) chooseAppShortcut() else addSetting("torch")
+            .setItems(labels) { _, _ ->
+                addSetting("torch")
             }
             .show()
     }
@@ -147,14 +145,15 @@ class MainActivity : Activity() {
         refreshPanelItems()
     }
 
-    private fun chooseAppShortcut() {
+    private fun chooseApplication() {
         val apps = packageManager.queryIntentActivities(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
             0
-        ).sortedBy { it.loadLabel(packageManager).toString() }
+        ).distinctBy { it.activityInfo.packageName }
+            .sortedBy { it.loadLabel(packageManager).toString() }
         val labels = apps.map { it.loadLabel(packageManager).toString() }.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle(R.string.add_app_shortcut)
+            .setTitle(R.string.action_app)
             .setItems(labels) { _, index ->
                 if (!PanelConfig.canAddApp(this)) {
                     Toast.makeText(this, R.string.panel_no_space, Toast.LENGTH_SHORT).show()
@@ -253,53 +252,10 @@ class MainActivity : Activity() {
         startService(Intent(this, FloatingPanelService::class.java))
     }
 
-    private fun showEdgeHandle() {
-        if (!QuickActions.canDrawOverlays(this)) {
-            QuickActions.requestOverlayPermission(this)
-            return
-        }
-        PanelHandleService.setEnabled(this, true)
-        ensureEdgeHandle()
-    }
-
     private fun ensureEdgeHandle() {
         if (PanelHandleService.isEnabled(this) && QuickActions.canDrawOverlays(this)) {
             startService(Intent(this, PanelHandleService::class.java))
         }
-    }
-
-    private fun chooseEdgeHandleWidth() {
-        val widths = intArrayOf(6, 8, 10, 12, 16, 20)
-        val labels = widths.map { "${it} dp" }.toTypedArray()
-        val checked = widths.indexOf(PanelHandleService.widthDp(this))
-        AlertDialog.Builder(this)
-            .setTitle(R.string.edge_handle_width)
-            .setSingleChoiceItems(labels, checked) { dialog, index ->
-                PanelHandleService.setWidthDp(this, widths[index])
-                DebugLog.write(this, "settings edge handle width=${widths[index]}")
-                if (QuickActions.canDrawOverlays(this)) {
-                    startService(Intent(this, PanelHandleService::class.java))
-                }
-                dialog.dismiss()
-            }
-            .show()
-    }
-
-    private fun chooseEdgeHandleLength() {
-        val lengths = intArrayOf(64, 80, 96, 120, 144, 180)
-        val labels = lengths.map { "${it} dp" }.toTypedArray()
-        val checked = lengths.indexOf(PanelHandleService.lengthDp(this))
-        AlertDialog.Builder(this)
-            .setTitle(R.string.edge_handle_length)
-            .setSingleChoiceItems(labels, checked) { dialog, index ->
-                PanelHandleService.setLengthDp(this, lengths[index])
-                DebugLog.write(this, "settings edge handle length=${lengths[index]}")
-                if (QuickActions.canDrawOverlays(this)) {
-                    startService(Intent(this, PanelHandleService::class.java))
-                }
-                dialog.dismiss()
-            }
-            .show()
     }
 
     private fun refreshPanelItems() {

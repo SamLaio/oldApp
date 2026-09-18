@@ -25,7 +25,6 @@ object QuickActions {
     private const val ACTION_TETHER_SETTINGS = "android.settings.TETHER_SETTINGS"
     private const val PREFS = "quick_actions"
     private const val KEY_TORCH_ON = "torch_on"
-    private const val KEY_SELECTED_APP = "selected_app"
 
     fun run(context: Context, id: String): Boolean {
         DebugLog.write(context, "run action=$id")
@@ -38,7 +37,6 @@ object QuickActions {
                 "rotation" -> toggleAutoRotate(context)
                 "sync" -> toggleAutoSync().let { true }
                 "torch" -> toggleTorch(context)
-                "app" -> launchSelectedApp(context)
                 "wifi" -> openWifi(context).let { true }
                 "bluetooth" -> openBluetooth(context).let { true }
                 "location" -> openLocation(context).let { true }
@@ -265,31 +263,6 @@ object QuickActions {
         camera.setTorchMode(id, enabled)
         prefs.edit().putBoolean(KEY_TORCH_ON, enabled).apply()
         return true
-    }
-
-    fun chooseApp(activity: android.app.Activity) {
-        val apps = activity.packageManager.queryIntentActivities(
-            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
-            0
-        ).sortedBy { it.loadLabel(activity.packageManager).toString() }
-        val labels = apps.map { it.loadLabel(activity.packageManager).toString() }.toTypedArray()
-        android.app.AlertDialog.Builder(activity)
-            .setTitle(R.string.choose_app_shortcut)
-            .setItems(labels) { _, index ->
-                val packageName = apps[index].activityInfo.packageName
-                activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    .edit()
-                    .putString(KEY_SELECTED_APP, packageName)
-                    .apply()
-                Toast.makeText(activity, activity.getString(R.string.app_shortcut_saved, labels[index]), Toast.LENGTH_SHORT).show()
-            }
-            .show()
-    }
-
-    fun launchSelectedApp(context: Context): Boolean {
-        val packageName = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_SELECTED_APP, null) ?: return false
-        return launchApp(context, packageName)
     }
 
     fun launchApp(context: Context, packageName: String): Boolean {

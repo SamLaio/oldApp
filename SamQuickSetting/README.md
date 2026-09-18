@@ -6,8 +6,8 @@
 
 - app 名稱：`SamQuickSetting`
 - package / applicationId：`tw.idv.samliao.quick.setting`
-- 版本：`0.7`
-- `versionCode`：`7`
+- 版本：`0.8`
+- `versionCode`：`8`
 - 最低版本：Android 10，`minSdk 29`
 - `targetSdk` / `compileSdk`：`35`
 - 技術：原生 Android Kotlin，無第三方 UI 框架。
@@ -17,10 +17,9 @@
 - 桌面圖示啟動後直接開啟懸浮面板。
 - 設定頁可：
   - 開啟懸浮面板
-  - 顯示側邊條
-  - 設定側邊條寬度與長度
+  - 側邊條設定：顯示 / 隱藏、寬度與長度
   - 加入設定鈕
-  - 加入 app 捷徑
+  - 加入應用程式
   - 選擇面板背景
   - 選擇格數
   - 鎖定 / 解鎖面板
@@ -44,7 +43,7 @@
 - 面板項目可拖曳排列。
 - 長按面板項目後可拖到刪除球移除。
 - 亮度與音量使用跨整列滑桿。
-- app 捷徑可加入多個 launcher app。
+- 「應用程式」以 package 開啟 App。
 
 ## 可加入的工具
 
@@ -75,7 +74,7 @@ NFC 設定
 
 ```text
 手電筒
-應用程式捷徑
+應用程式
 ```
 
 ## 權限與限制
