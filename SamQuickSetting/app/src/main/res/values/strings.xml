@@ -44,6 +44,7 @@
     <string name="action_brightness">亮度</string>
     <string name="action_volume">音量</string>
     <string name="action_ringer">鈴聲/震動模式</string>
+    <string name="ringer_policy_access_required">請允許 SamQuickSetting 使用勿擾模式存取權</string>
     <string name="action_timeout">螢幕逾時</string>
     <string name="action_rotation">自動旋轉</string>
     <string name="action_sync">自動同步</string>

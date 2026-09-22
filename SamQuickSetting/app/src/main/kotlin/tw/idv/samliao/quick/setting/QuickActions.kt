@@ -1,6 +1,7 @@
 package tw.idv.samliao.quick.setting
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.ContentResolver
 import android.content.Context
@@ -185,18 +186,25 @@ object QuickActions {
 
     fun toggleRinger(context: Context): Boolean {
         val audio = context.getSystemService(AudioManager::class.java)
+        val notificationManager = context.getSystemService(NotificationManager::class.java)
         val before = audio.ringerMode
         val target = if (before == AudioManager.RINGER_MODE_NORMAL) {
             AudioManager.RINGER_MODE_VIBRATE
         } else {
             AudioManager.RINGER_MODE_NORMAL
         }
-        audio.ringerMode = target
-        if (target == AudioManager.RINGER_MODE_NORMAL) {
-            audio.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0)
+        try {
+            audio.ringerMode = target
+        } catch (_: SecurityException) {
+            requestRingerPolicyAccess(context)
+            return true
         }
         val actual = audio.ringerMode
         DebugLog.write(context, "ringer toggle before=$before target=$target actual=$actual")
+        if (actual != target && !notificationManager.isNotificationPolicyAccessGranted) {
+            requestRingerPolicyAccess(context)
+            return true
+        }
         return actual == target
     }
 
@@ -422,6 +430,12 @@ object QuickActions {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
         return false
+    }
+
+    private fun requestRingerPolicyAccess(context: Context) {
+        Toast.makeText(context, R.string.ringer_policy_access_required, Toast.LENGTH_SHORT).show()
+        openSettings(context, Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+        DebugLog.write(context, "ringer needs notification policy access")
     }
 
     private fun openSettings(context: Context, action: String, fallbackAction: String? = null) {

@@ -6,8 +6,8 @@
 
 - app 名稱：`SamQuickSetting`
 - package / applicationId：`tw.idv.samliao.quick.setting`
-- 版本：`0.8`
-- `versionCode`：`8`
+- 版本：`0.9`
+- `versionCode`：`9`
 - 最低版本：Android 10，`minSdk 29`
 - `targetSdk` / `compileSdk`：`35`
 - 技術：原生 Android Kotlin，無第三方 UI 框架。
@@ -81,6 +81,7 @@ NFC 設定
 
 - 需要「顯示在其他應用程式上層」才能顯示懸浮面板或側邊條。
 - 亮度、螢幕逾時、自動旋轉需要「允許修改系統設定」。
+- 鈴聲／震動模式首次使用可能要求「勿擾模式存取權」。
 - 手電筒需要相機權限。
 - Wi-Fi、Bluetooth、位置、熱點、NFC 等在現代 Android 上多數不能直接靜默切換，因此目前多數是開啟對應系統設定頁或顯示狀態。
 - 不移植舊版直接切行動資料、飛航模式、4G/WiMAX、清全 app cache、讀系統 log、把第三方桌面 widget 放進面板等功能。
