@@ -6,7 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organizer.db", null, 4) {
+class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organizer.db", null, 5) {
     override fun onConfigure(db: SQLiteDatabase) {
         db.setForeignKeyConstraintsEnabled(true)
     }
@@ -43,6 +43,7 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         )
         createWidgetTable(db)
         createSettingsTable(db)
+        createManualUncategorizedTable(db)
         DEFAULT_FOLDERS.forEach { folder ->
             saveFolder(db, folder.id, folder.name, folder.keywords, false, folder.category)
         }
@@ -51,6 +52,7 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createWidgetTable(db)
         if (oldVersion < 4) createSettingsTable(db)
+        if (oldVersion < 5) createManualUncategorizedTable(db)
     }
 
     fun folders(): List<OrganizerFolder> {
@@ -99,23 +101,41 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         readableDatabase.rawQuery("SELECT package_name, folder_id FROM assignments", emptyArray()).use { cursor ->
             while (cursor.moveToNext()) result[cursor.getString(0)] = cursor.getString(1)
         }
+        readableDatabase.rawQuery("SELECT package_name FROM manual_uncategorized", emptyArray()).use { cursor ->
+            while (cursor.moveToNext()) result[cursor.getString(0)] = UNCATEGORIZED
+        }
         return result
     }
 
     fun setAssignment(packageName: String, folderId: String?) {
-        if (folderId == null) {
-            writableDatabase.delete("assignments", "package_name = ?", arrayOf(packageName))
-            return
+        val db = writableDatabase
+        when (folderId) {
+            null -> {
+                db.delete("assignments", "package_name = ?", arrayOf(packageName))
+                db.delete("manual_uncategorized", "package_name = ?", arrayOf(packageName))
+            }
+            UNCATEGORIZED -> {
+                db.insertWithOnConflict(
+                    "manual_uncategorized",
+                    null,
+                    ContentValues().apply { put("package_name", packageName) },
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+                db.delete("assignments", "package_name = ?", arrayOf(packageName))
+            }
+            else -> {
+                db.insertWithOnConflict(
+                    "assignments",
+                    null,
+                    ContentValues().apply {
+                        put("package_name", packageName)
+                        put("folder_id", folderId)
+                    },
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+                db.delete("manual_uncategorized", "package_name = ?", arrayOf(packageName))
+            }
         }
-        writableDatabase.insertWithOnConflict(
-            "assignments",
-            null,
-            ContentValues().apply {
-                put("package_name", packageName)
-                put("folder_id", folderId)
-            },
-            SQLiteDatabase.CONFLICT_REPLACE
-        )
     }
 
     fun setWidgetFolder(appWidgetId: Int, folderId: String) {
@@ -201,17 +221,15 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         custom: Boolean,
         category: Int?
     ) {
-        db.insertWithOnConflict(
-            "folders",
-            null,
-            ContentValues().apply {
-                put("id", id)
-                put("name", name.trim().ifBlank { "未命名" })
-                put("custom", if (custom) 1 else 0)
-                if (category == null) putNull("category") else put("category", category)
-            },
-            SQLiteDatabase.CONFLICT_REPLACE
-        )
+        val values = ContentValues().apply {
+            put("name", name.trim().ifBlank { "未命名" })
+            put("custom", if (custom) 1 else 0)
+            if (category == null) putNull("category") else put("category", category)
+        }
+        if (db.update("folders", values, "id = ?", arrayOf(id)) == 0) {
+            values.put("id", id)
+            db.insertOrThrow("folders", null, values)
+        }
         db.delete("keywords", "folder_id = ?", arrayOf(id))
         keywords.map { it.trim() }
             .filter { it.isNotEmpty() }
@@ -244,6 +262,10 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         db.execSQL(
             "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
         )
+    }
+
+    private fun createManualUncategorizedTable(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS manual_uncategorized (package_name TEXT PRIMARY KEY)")
     }
 
     private companion object {

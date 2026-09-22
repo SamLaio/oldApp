@@ -6,8 +6,8 @@
 
 - app 名稱：`SamAppOrganizer`
 - package / applicationId：`tw.idv.samliao.apporganizer`
-- 版本：`0.2`
-- `versionCode`：`2`
+- 版本：`0.3`
+- `versionCode`：`3`
 - 最低版本：Android 10，`minSdk 29`
 - `targetSdk` / `compileSdk`：`35`
 - 技術：原生 Android Kotlin，無第三方 UI 框架。
@@ -21,10 +21,13 @@
 - 資料夾列表會顯示資料夾預覽圖示。
 - 分類內 app 以類 launcher 清單顯示 app 圖示、名稱與 package。
 - 長按資料夾可改名稱與關鍵字。
+- 編輯既有資料夾時可選擇 app；清單會勾選目前在資料夾內的 app。
 - 主畫面可選全域資料夾圖示風格，預設以透明底顯示 app 圖示；所有資料夾與桌面小工具會同步套用。
+- 主畫面可輸入名稱或 package 篩選所有 app，並可直接長按結果調整分類。
 - 可新增自訂資料夾，例如建立 `Google` 並加入 `google, gmail, youtube, maps`。
 - 點資料夾可看該分類 app。
 - 長按 app 可手動指定分類，手動指定優先於自動分類。
+- 變更 app 分類或資料夾設定後，會留在原本開啟的頁面。
 - 桌面小工具是 `1 x 1` 資料夾圖示，新增時先選資料夾。
 - 點桌面資料夾小工具會展開資料夾 popup，點 app 圖示可啟動 app。
 - 展開後長按標題可進入 app 主畫面。

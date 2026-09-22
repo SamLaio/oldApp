@@ -7,6 +7,7 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -17,6 +18,8 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private val db: AppOrganizerDb by lazy { AppOrganizerDb(this) }
     private var atRoot = true
+    private var openFolderId: String? = null
+    private var filterQuery: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,6 +28,8 @@ class MainActivity : Activity() {
 
     private fun showFolders() {
         atRoot = true
+        openFolderId = null
+        filterQuery = null
         val folders = db.folders()
         val grouped = groupedApps(folders)
         val iconStyle = db.iconStyle()
@@ -48,7 +53,20 @@ class MainActivity : Activity() {
                 }
             })
         })
-        root.addView(actionButton("資料夾風格") { chooseFolderStyle() })
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = matchWrap()
+            addView(actionButton("資料夾風格") { chooseFolderStyle() }.apply {
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    rightMargin = dp(6)
+                }
+            })
+            addView(actionButton("篩選 app") { showFilterDialog() }.apply {
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    leftMargin = dp(6)
+                }
+            })
+        })
         root.addView(label("長按資料夾可改名稱與關鍵字。", 14f, 0xFF5F6368.toInt(), Gravity.START).apply {
             setPadding(0, dp(14), 0, dp(4))
         })
@@ -62,6 +80,8 @@ class MainActivity : Activity() {
 
     private fun showFolder(folder: OrganizerFolder, apps: List<AppItem>) {
         atRoot = false
+        openFolderId = folder.id
+        filterQuery = null
         val root = rootLayout()
         root.addView(actionButton("返回") { showFolders() })
         root.addView(label("${folder.name} (${apps.size})", 28f, 0xFF202124.toInt(), Gravity.CENTER).apply {
@@ -99,8 +119,14 @@ class MainActivity : Activity() {
             addView(nameInput)
             addView(keywordInput)
         }
+        val deleteButton = if (!isNew && folder?.custom == true) {
+            Button(this).apply { text = "刪除資料夾" }
+        } else {
+            null
+        }
+        deleteButton?.let(content::addView)
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(if (isNew) "新增資料夾" else "編輯資料夾")
             .setView(content)
             .setPositiveButton("儲存") { _, _ ->
@@ -110,19 +136,20 @@ class MainActivity : Activity() {
                 if (isNew) db.addFolder(nameInput.text.toString(), keywords)
                 else db.updateFolder(folder!!, nameInput.text.toString(), keywords)
                 FolderWidgetProvider.updateAll(this)
-                showFolders()
+                showCurrentPage()
             }
             .setNegativeButton("取消", null)
             .apply {
-                if (!isNew && folder?.custom == true) {
-                    setNeutralButton("刪除") { _, _ ->
-                        db.deleteFolder(folder.id)
-                        FolderWidgetProvider.updateAll(this@MainActivity)
-                        showFolders()
-                    }
-                }
+                if (!isNew) setNeutralButton("選擇App") { _, _ -> showAppPicker(folder!!) }
             }
-            .show()
+            .create()
+        deleteButton?.setOnClickListener {
+            db.deleteFolder(folder!!.id)
+            FolderWidgetProvider.updateAll(this)
+            dialog.dismiss()
+            showCurrentPage()
+        }
+        dialog.show()
     }
 
     private fun chooseFolderForApp(app: AppItem) {
@@ -134,7 +161,7 @@ class MainActivity : Activity() {
                 db.setAssignment(app.packageName, if (index == 0) null else folders[index - 1].id)
                 FolderWidgetProvider.updateAll(this)
                 Toast.makeText(this, "已更新分類", Toast.LENGTH_SHORT).show()
-                showFolders()
+                showCurrentPage()
             }
             .show()
     }
@@ -156,13 +183,123 @@ class MainActivity : Activity() {
                 db.setIconStyle(styles[index])
                 FolderWidgetProvider.updateAll(this)
                 dialog.dismiss()
-                showFolders()
+                showCurrentPage()
             }
             .show()
     }
 
+    private fun showFilterDialog() {
+        val input = EditText(this).apply { hint = "app 名稱或 package" }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("篩選 app")
+            .setView(input)
+            .setPositiveButton("送出", null)
+            .setNeutralButton("清除", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val query = input.text.toString().trim()
+                if (query.isBlank()) input.error = "請輸入篩選文字"
+                else {
+                    dialog.dismiss()
+                    showFilteredApps(query)
+                }
+            }
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { input.text.clear() }
+        }
+        dialog.show()
+    }
+
+    private fun showFilteredApps(query: String) {
+        atRoot = false
+        openFolderId = null
+        filterQuery = query
+        val apps = OrganizerModel.loadApps(this).filter {
+            it.label.contains(query, ignoreCase = true) || it.packageName.contains(query, ignoreCase = true)
+        }
+        val root = rootLayout()
+        root.addView(actionButton("返回") { showFolders() })
+        root.addView(label("篩選結果 (${apps.size})", 28f, 0xFF202124.toInt(), Gravity.CENTER).apply {
+            setPadding(0, dp(12), 0, dp(8))
+        })
+        if (apps.isEmpty()) root.addView(label("沒有符合的 app。", 16f, 0xFF5F6368.toInt(), Gravity.CENTER))
+        else apps.forEach { root.addView(appRow(it)) }
+        setContentView(ScrollView(this).apply { addView(root) })
+    }
+
+    private fun showAppPicker(folder: OrganizerFolder) {
+        atRoot = false
+        openFolderId = null
+        filterQuery = null
+        val folders = db.folders()
+        val apps = OrganizerModel.loadApps(this)
+        val initiallySelected = groupedApps(folders)[folder.id].orEmpty().mapTo(mutableSetOf()) { it.packageName }
+        val selected = initiallySelected.toMutableSet()
+        val root = rootLayout()
+        root.addView(actionButton("返回") {
+            showFolders()
+            editFolder(folder)
+        })
+        root.addView(label("選擇 ${folder.name} 的 app", 24f, 0xFF202124.toInt(), Gravity.CENTER).apply {
+            setPadding(0, dp(12), 0, dp(8))
+        })
+        apps.forEach { app ->
+            val checkBox = CheckBox(this).apply {
+                text = app.label
+                textSize = 18f
+                isChecked = app.packageName in selected
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setOnCheckedChangeListener { _, checked ->
+                    if (checked) selected += app.packageName else selected -= app.packageName
+                }
+            }
+            root.addView(LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = matchWrap().apply { topMargin = dp(2) }
+                setPadding(dp(8), dp(4), dp(8), dp(4))
+                setOnClickListener { checkBox.isChecked = !checkBox.isChecked }
+                addView(ImageView(this@MainActivity).apply {
+                    setImageDrawable(app.icon)
+                    layoutParams = LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(8) }
+                })
+                addView(checkBox)
+            })
+        }
+        root.addView(actionButton("儲存") {
+            apps.forEach { app ->
+                when {
+                    app.packageName in selected -> db.setAssignment(app.packageName, folder.id)
+                    app.packageName !in selected && app.packageName in initiallySelected ->
+                        db.setAssignment(app.packageName, UNCATEGORIZED)
+                }
+            }
+            FolderWidgetProvider.updateAll(this)
+            showFolders()
+            editFolder(folder)
+        })
+        setContentView(ScrollView(this).apply { addView(root) })
+    }
+
     private fun groupedApps(folders: List<OrganizerFolder>): Map<String, List<AppItem>> =
         OrganizerModel.classify(OrganizerModel.loadApps(this), folders, db.assignments())
+
+    private fun showCurrentPage() {
+        filterQuery?.let {
+            showFilteredApps(it)
+            return
+        }
+        val folderId = openFolderId ?: run {
+            showFolders()
+            return
+        }
+        val folders = db.folders()
+        val folder = (folders + OrganizerModel.uncategorizedFolder()).firstOrNull { it.id == folderId }
+        if (folder == null) {
+            showFolders()
+            return
+        }
+        showFolder(folder, groupedApps(folders)[folder.id].orEmpty())
+    }
 
     private fun openApp(packageName: String) {
         val intent = packageManager.getLaunchIntentForPackage(packageName)
