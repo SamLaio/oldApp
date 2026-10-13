@@ -2,8 +2,10 @@ package tw.idv.samliao.apporganizer
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -14,16 +16,42 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : Activity() {
     private val db: AppOrganizerDb by lazy { AppOrganizerDb(this) }
     private var atRoot = true
     private var openFolderId: String? = null
     private var filterQuery: String? = null
+    private var folderListScroll: ScrollView? = null
+    private var pendingFolderScrollY: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showFolders()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data ?: return
+        if (resultCode != RESULT_OK) return
+        runCatching {
+            when (requestCode) {
+                EXPORT_FOLDERS -> contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
+                    it.write(exportFoldersJson())
+                } ?: error("無法寫入檔案")
+                IMPORT_FOLDERS -> contentResolver.openInputStream(uri)?.bufferedReader()?.use {
+                    val count = db.importFolders(parseFoldersJson(it.readText()))
+                    FolderWidgetProvider.updateAll(this)
+                    showFolders()
+                    Toast.makeText(this, "已匯入 $count 個資料夾", Toast.LENGTH_SHORT).show()
+                } ?: error("無法讀取檔案")
+            }
+        }.onFailure {
+            Toast.makeText(this, "匯入或匯出失敗：${it.message ?: "檔案格式錯誤"}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun showFolders() {
@@ -34,6 +62,8 @@ class MainActivity : Activity() {
         val grouped = groupedApps(folders)
         val iconStyle = db.iconStyle()
         val root = rootLayout()
+        val restoreScrollY = pendingFolderScrollY
+        pendingFolderScrollY = null
 
         root.addView(label(getString(R.string.app_name), 32f, 0xFF202124.toInt(), Gravity.CENTER))
         root.addView(label(getString(R.string.app_summary), 16f, 0xFF5F6368.toInt(), Gravity.CENTER).apply {
@@ -67,6 +97,20 @@ class MainActivity : Activity() {
                 }
             })
         })
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = matchWrap()
+            addView(actionButton("匯出") { exportFolders() }.apply {
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    rightMargin = dp(6)
+                }
+            })
+            addView(actionButton("匯入") { importFolders() }.apply {
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    leftMargin = dp(6)
+                }
+            })
+        })
         root.addView(label("長按資料夾可改名稱與關鍵字。", 14f, 0xFF5F6368.toInt(), Gravity.START).apply {
             setPadding(0, dp(14), 0, dp(4))
         })
@@ -75,7 +119,9 @@ class MainActivity : Activity() {
             root.addView(folderRow(folder, grouped[folder.id].orEmpty(), iconStyle))
         }
 
-        setContentView(ScrollView(this).apply { addView(root) })
+        folderListScroll = ScrollView(this).apply { addView(root) }
+        setContentView(folderListScroll)
+        restoreScrollY?.let { scrollY -> folderListScroll?.post { folderListScroll?.scrollTo(0, scrollY) } }
     }
 
     private fun showFolder(folder: OrganizerFolder, apps: List<AppItem>) {
@@ -93,6 +139,57 @@ class MainActivity : Activity() {
             apps.forEach { root.addView(appRow(it)) }
         }
         setContentView(ScrollView(this).apply { addView(root) })
+    }
+
+    private fun exportFolders() {
+        startActivityForResult(
+            Intent(Intent.ACTION_CREATE_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("application/json")
+                .putExtra(Intent.EXTRA_TITLE, "SamAppOrganizer-folders.json"),
+            EXPORT_FOLDERS
+        )
+    }
+
+    private fun importFolders() {
+        startActivityForResult(
+            Intent(Intent.ACTION_OPEN_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("application/json"),
+            IMPORT_FOLDERS
+        )
+    }
+
+    private fun exportFoldersJson(): String = JSONObject().apply {
+        put("version", 1)
+        put("folders", JSONArray().apply {
+            db.folders().forEach { folder ->
+                put(JSONObject().apply {
+                    put("id", folder.id)
+                    put("name", folder.name)
+                    put("keywords", JSONArray(folder.keywords))
+                    put("custom", folder.custom)
+                    put("category", folder.category)
+                })
+            }
+        })
+    }.toString(2)
+
+    private fun parseFoldersJson(text: String): List<OrganizerFolder> {
+        val entries = JSONObject(text).optJSONArray("folders") ?: error("找不到 folders")
+        return List(entries.length()) { index ->
+            val item = entries.getJSONObject(index)
+            val name = item.optString("name").trim()
+            require(name.isNotEmpty()) { "第 ${index + 1} 個資料夾沒有名稱" }
+            val keywords = item.optJSONArray("keywords") ?: JSONArray()
+            OrganizerFolder(
+                id = item.optString("id"),
+                name = name,
+                keywords = List(keywords.length()) { keywordIndex -> keywords.getString(keywordIndex) },
+                category = if (item.has("category") && !item.isNull("category")) item.getInt("category") else null,
+                custom = item.optBoolean("custom", true)
+            )
+        }
     }
 
     @Suppress("OVERRIDE_DEPRECATION")
@@ -133,6 +230,7 @@ class MainActivity : Activity() {
                 val keywords = keywordInput.text.toString().split(',', '\n')
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
+                rememberFolderListScroll()
                 if (isNew) db.addFolder(nameInput.text.toString(), keywords)
                 else db.updateFolder(folder!!, nameInput.text.toString(), keywords)
                 FolderWidgetProvider.updateAll(this)
@@ -144,12 +242,17 @@ class MainActivity : Activity() {
             }
             .create()
         deleteButton?.setOnClickListener {
+            rememberFolderListScroll()
             db.deleteFolder(folder!!.id)
             FolderWidgetProvider.updateAll(this)
             dialog.dismiss()
             showCurrentPage()
         }
         dialog.show()
+    }
+
+    private fun rememberFolderListScroll() {
+        if (atRoot) pendingFolderScrollY = folderListScroll?.scrollY ?: 0
     }
 
     private fun chooseFolderForApp(app: AppItem) {
@@ -314,7 +417,10 @@ class MainActivity : Activity() {
             setPadding(dp(12), dp(10), dp(12), dp(10))
             background = getDrawable(android.R.drawable.dialog_holo_light_frame)
             layoutParams = matchWrap().apply { topMargin = dp(10) }
-            setOnClickListener { showFolder(folder, apps) }
+            setOnClickListener {
+                rememberFolderListScroll()
+                showFolder(folder, apps)
+            }
             setOnLongClickListener {
                 editFolder(folder)
                 true
@@ -327,7 +433,10 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 addView(label("${folder.name} (${apps.size})", 20f, 0xFF202124.toInt(), Gravity.START))
-                addView(label(folder.keywords.joinToString(", ").ifBlank { "無關鍵字" }, 13f, 0xFF5F6368.toInt(), Gravity.START))
+                addView(label(folder.keywords.joinToString(", ").ifBlank { "無關鍵字" }, 13f, 0xFF5F6368.toInt(), Gravity.START).apply {
+                    maxLines = 2
+                    ellipsize = TextUtils.TruncateAt.END
+                })
             })
         }
 
@@ -387,4 +496,9 @@ class MainActivity : Activity() {
     )
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private companion object {
+        const val EXPORT_FOLDERS = 1001
+        const val IMPORT_FOLDERS = 1002
+    }
 }
