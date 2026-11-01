@@ -10,6 +10,11 @@ import android.net.Uri
 import android.widget.RemoteViews
 
 class FolderWidgetProvider : AppWidgetProvider() {
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) updateAll(context)
+    }
+
     override fun onUpdate(context: Context, manager: AppWidgetManager, appWidgetIds: IntArray) {
         appWidgetIds.forEach { updateWidget(context, it) }
     }
@@ -46,7 +51,7 @@ class FolderWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_folder_label, folder?.name ?: "資料夾")
             views.setImageViewBitmap(
                 R.id.widget_folder_icon,
-                folderPreviewBitmap(apps, dp(context, 54), iconStyle)
+                folderPreviewBitmap(apps, dp(context, 48), iconStyle)
             )
             views.setOnClickPendingIntent(R.id.widget_folder_root, folderPendingIntent(context, appWidgetId))
             AppWidgetManager.getInstance(context).updateAppWidget(appWidgetId, views)

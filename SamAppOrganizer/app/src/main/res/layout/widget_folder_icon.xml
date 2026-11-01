@@ -1,24 +1,30 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_folder_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="2dp">
+    android:gravity="center">
 
     <ImageView
         android:id="@+id/widget_folder_icon"
-        android:layout_width="54dp"
-        android:layout_height="54dp"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="top|center_horizontal"
         android:contentDescription="@null" />
 
     <TextView
         android:id="@+id/widget_folder_label"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="18dp"
+        android:layout_gravity="top|center_horizontal"
         android:ellipsize="end"
         android:gravity="center"
+        android:includeFontPadding="false"
+        android:layout_marginTop="57dp"
         android:maxLines="1"
         android:textColor="#FFFFFFFF"
-        android:textSize="11sp" />
-</LinearLayout>
+        android:textSize="13sp"
+        android:shadowColor="#99000000"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="2" />
+</FrameLayout>
