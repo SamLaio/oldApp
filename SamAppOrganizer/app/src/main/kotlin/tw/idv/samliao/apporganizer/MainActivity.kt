@@ -27,6 +27,11 @@ class MainActivity : Activity() {
     private var folderListScroll: ScrollView? = null
     private var pendingFolderScrollY: Int? = null
 
+    private data class ImportedOrganizer(
+        val folders: List<OrganizerFolder>,
+        val assignments: Map<String, String>?
+    )
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showFolders()
@@ -43,10 +48,17 @@ class MainActivity : Activity() {
                     it.write(exportFoldersJson())
                 } ?: error("無法寫入檔案")
                 IMPORT_FOLDERS -> contentResolver.openInputStream(uri)?.bufferedReader()?.use {
-                    val count = db.importFolders(parseFoldersJson(it.readText()))
+                    val imported = parseFoldersJson(it.readText())
+                    val count = db.importFolders(imported.folders)
+                    val assignmentCount = imported.assignments?.let(db::importAssignments)
                     FolderWidgetProvider.updateAll(this)
                     showFolders()
-                    Toast.makeText(this, "已匯入 $count 個資料夾", Toast.LENGTH_SHORT).show()
+                    val message = if (assignmentCount == null) {
+                        "已匯入 $count 個資料夾"
+                    } else {
+                        "已匯入 $count 個資料夾與 $assignmentCount 個 app 分類"
+                    }
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
                 } ?: error("無法讀取檔案")
             }
         }.onFailure {
@@ -161,7 +173,7 @@ class MainActivity : Activity() {
     }
 
     private fun exportFoldersJson(): String = JSONObject().apply {
-        put("version", 1)
+        put("version", 2)
         put("folders", JSONArray().apply {
             db.folders().forEach { folder ->
                 put(JSONObject().apply {
@@ -173,11 +185,15 @@ class MainActivity : Activity() {
                 })
             }
         })
+        put("assignments", JSONObject().apply {
+            db.assignments().forEach { (packageName, folderId) -> put(packageName, folderId) }
+        })
     }.toString(2)
 
-    private fun parseFoldersJson(text: String): List<OrganizerFolder> {
-        val entries = JSONObject(text).optJSONArray("folders") ?: error("找不到 folders")
-        return List(entries.length()) { index ->
+    private fun parseFoldersJson(text: String): ImportedOrganizer {
+        val source = JSONObject(text)
+        val entries = source.optJSONArray("folders") ?: error("找不到 folders")
+        val folders = List(entries.length()) { index ->
             val item = entries.getJSONObject(index)
             val name = item.optString("name").trim()
             require(name.isNotEmpty()) { "第 ${index + 1} 個資料夾沒有名稱" }
@@ -190,6 +206,15 @@ class MainActivity : Activity() {
                 custom = item.optBoolean("custom", true)
             )
         }
+        val assignments = if (!source.has("assignments")) null else {
+            val entriesByPackage = source.optJSONObject("assignments") ?: error("assignments 必須是物件")
+            mutableMapOf<String, String>().apply {
+                entriesByPackage.keys().forEach { packageName ->
+                    put(packageName, entriesByPackage.getString(packageName))
+                }
+            }
+        }
+        return ImportedOrganizer(folders, assignments)
     }
 
     @Suppress("OVERRIDE_DEPRECATION")

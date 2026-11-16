@@ -111,6 +111,25 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         }
     }
 
+    fun importAssignments(assignments: Map<String, String>): Int {
+        val values = assignments.map { it.key.trim() to it.value.trim() }
+        val folderIds = folders().map { it.id }.toSet() + UNCATEGORIZED
+        values.forEach { (packageName, folderId) ->
+            require(packageName.isNotEmpty()) { "app package 不可空白" }
+            require(folderId in folderIds) { "$packageName 指定了不存在的資料夾：$folderId" }
+        }
+        writableDatabase.beginTransaction()
+        try {
+            writableDatabase.delete("assignments", null, null)
+            writableDatabase.delete("manual_uncategorized", null, null)
+            values.forEach { (packageName, folderId) -> setAssignment(packageName, folderId) }
+            writableDatabase.setTransactionSuccessful()
+            return values.size
+        } finally {
+            writableDatabase.endTransaction()
+        }
+    }
+
     fun deleteFolder(id: String) {
         writableDatabase.beginTransaction()
         try {
