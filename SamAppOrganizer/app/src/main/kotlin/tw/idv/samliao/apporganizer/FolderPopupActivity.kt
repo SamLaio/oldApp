@@ -11,6 +11,7 @@ import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 class FolderPopupActivity : Activity() {
@@ -44,14 +45,18 @@ class FolderPopupActivity : Activity() {
             setBackgroundColor(0x99000000.toInt())
             setOnClickListener { finish() }
         }
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val panel = ScrollView(this).apply {
+            isFillViewport = false
             background = getDrawable(R.drawable.folder_popup_background)
-            setPadding(dp(18), dp(16), dp(18), dp(14))
             setOnClickListener { }
             layoutParams = FrameLayout.LayoutParams(dp(300), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER)
         }
-        panel.addView(TextView(this).apply {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(14))
+            setOnClickListener { }
+        }
+        content.addView(TextView(this).apply {
             text = folder.name
             textSize = 20f
             setTextColor(0xFFFFFFFF.toInt())
@@ -63,10 +68,11 @@ class FolderPopupActivity : Activity() {
                 true
             }
         })
-        panel.addView(GridLayout(this).apply {
+        content.addView(GridLayout(this).apply {
             columnCount = 3
-            apps.take(9).forEach { app -> addView(appCell(app)) }
+            apps.forEach { app -> addView(appCell(app)) }
         })
+        panel.addView(content)
         root.addView(panel)
         setContentView(root)
     }
