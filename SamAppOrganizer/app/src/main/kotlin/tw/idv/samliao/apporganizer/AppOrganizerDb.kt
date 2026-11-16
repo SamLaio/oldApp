@@ -6,7 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organizer.db", null, 6) {
+class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organizer.db", null, 10) {
     override fun onConfigure(db: SQLiteDatabase) {
         db.setForeignKeyConstraintsEnabled(true)
     }
@@ -44,6 +44,7 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         createWidgetTable(db)
         createSettingsTable(db)
         createManualUncategorizedTable(db)
+        createFolderIndexTable(db)
         DEFAULT_FOLDERS.forEach { folder -> saveFolder(db, folder.id, folder.name, folder.keywords, false, folder.category) }
     }
 
@@ -51,7 +52,12 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         if (oldVersion < 2) createWidgetTable(db)
         if (oldVersion < 4) createSettingsTable(db)
         if (oldVersion < 5) createManualUncategorizedTable(db)
-        if (oldVersion < 6) mergeDefaultFolders(db)
+        if (oldVersion < 9) mergeDefaultFolders(db)
+        if (oldVersion < 10) {
+            createFolderIndexTable(db)
+            db.execSQL("INSERT OR REPLACE INTO folder_index(package_name, folder_id) SELECT package_name, folder_id FROM assignments")
+            db.execSQL("INSERT OR REPLACE INTO folder_index(package_name, folder_id) SELECT package_name, '$UNCATEGORIZED' FROM manual_uncategorized")
+        }
     }
 
     fun folders(): List<OrganizerFolder> {
@@ -113,16 +119,10 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
 
     fun importAssignments(assignments: Map<String, String>): Int {
         val values = assignments.map { it.key.trim() to it.value.trim() }
-        val folderIds = folders().map { it.id }.toSet() + UNCATEGORIZED
-        values.forEach { (packageName, folderId) ->
-            require(packageName.isNotEmpty()) { "app package 不可空白" }
-            require(folderId in folderIds) { "$packageName 指定了不存在的資料夾：$folderId" }
-        }
+        validateFolderIndex(values)
         writableDatabase.beginTransaction()
         try {
-            writableDatabase.delete("assignments", null, null)
-            writableDatabase.delete("manual_uncategorized", null, null)
-            values.forEach { (packageName, folderId) -> setAssignment(packageName, folderId) }
+            replaceFolderIndex(writableDatabase, values)
             writableDatabase.setTransactionSuccessful()
             return values.size
         } finally {
@@ -134,6 +134,7 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         writableDatabase.beginTransaction()
         try {
             writableDatabase.delete("assignments", "folder_id = ?", arrayOf(id))
+            writableDatabase.delete("folder_index", "folder_id = ?", arrayOf(id))
             writableDatabase.delete("widget_folders", "folder_id = ?", arrayOf(id))
             writableDatabase.delete("keywords", "folder_id = ?", arrayOf(id))
             writableDatabase.delete("folders", "id = ? AND custom = 1", arrayOf(id))
@@ -143,46 +144,53 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         }
     }
 
-    fun assignments(): Map<String, String> {
+    fun folderIndex(): Map<String, String> {
         val result = mutableMapOf<String, String>()
-        readableDatabase.rawQuery("SELECT package_name, folder_id FROM assignments", emptyArray()).use { cursor ->
+        readableDatabase.rawQuery("SELECT package_name, folder_id FROM folder_index", emptyArray()).use { cursor ->
             while (cursor.moveToNext()) result[cursor.getString(0)] = cursor.getString(1)
-        }
-        readableDatabase.rawQuery("SELECT package_name FROM manual_uncategorized", emptyArray()).use { cursor ->
-            while (cursor.moveToNext()) result[cursor.getString(0)] = UNCATEGORIZED
         }
         return result
     }
 
-    fun setAssignment(packageName: String, folderId: String?) {
-        val db = writableDatabase
-        when (folderId) {
-            null -> {
-                db.delete("assignments", "package_name = ?", arrayOf(packageName))
-                db.delete("manual_uncategorized", "package_name = ?", arrayOf(packageName))
-            }
-            UNCATEGORIZED -> {
-                db.insertWithOnConflict(
-                    "manual_uncategorized",
-                    null,
-                    ContentValues().apply { put("package_name", packageName) },
-                    SQLiteDatabase.CONFLICT_REPLACE
-                )
-                db.delete("assignments", "package_name = ?", arrayOf(packageName))
-            }
-            else -> {
-                db.insertWithOnConflict(
-                    "assignments",
-                    null,
-                    ContentValues().apply {
-                        put("package_name", packageName)
-                        put("folder_id", folderId)
-                    },
-                    SQLiteDatabase.CONFLICT_REPLACE
-                )
-                db.delete("manual_uncategorized", "package_name = ?", arrayOf(packageName))
+    fun indexedPackages(folderId: String): List<String> =
+        readableDatabase.rawQuery(
+            "SELECT package_name FROM folder_index WHERE folder_id = ? ORDER BY package_name",
+            arrayOf(folderId)
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) add(cursor.getString(0))
             }
         }
+
+    fun isFolderIndexReady(): Boolean = setting(FOLDER_INDEX_READY) == "1"
+
+    fun replaceFolderIndex(index: Map<String, String>) {
+        val values = index.map { it.key.trim() to it.value.trim() }
+        validateFolderIndex(values)
+        writableDatabase.beginTransaction()
+        try {
+            replaceFolderIndex(writableDatabase, values)
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
+    }
+
+    fun updateFolderIndex(packageName: String, folderId: String) {
+        require(packageName.isNotBlank()) { "app package 不可空白" }
+        require(folderId == UNCATEGORIZED || folders().any { it.id == folderId }) {
+            "$packageName 指定了不存在的資料夾：$folderId"
+        }
+        writableDatabase.insertWithOnConflict(
+            "folder_index",
+            null,
+            ContentValues().apply {
+                put("package_name", packageName)
+                put("folder_id", folderId)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+        setSetting(FOLDER_INDEX_READY, "1")
     }
 
     fun setWidgetFolder(appWidgetId: Int, folderId: String) {
@@ -211,21 +219,26 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
     }
 
     fun iconStyle(): String {
-        readableDatabase.rawQuery(
-            "SELECT value FROM settings WHERE key = ?",
-            arrayOf(FOLDER_ICON_STYLE)
-        ).use { cursor ->
-            return if (cursor.moveToFirst()) cursor.getString(0) else FolderIconStyle.PREVIEW
-        }
+        return setting(FOLDER_ICON_STYLE) ?: FolderIconStyle.PREVIEW
     }
 
     fun setIconStyle(style: String) {
+        setSetting(FOLDER_ICON_STYLE, style)
+    }
+
+    private fun setting(key: String): String? =
+        readableDatabase.rawQuery(
+            "SELECT value FROM settings WHERE key = ?",
+            arrayOf(key)
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+
+    private fun setSetting(key: String, value: String) {
         writableDatabase.insertWithOnConflict(
             "settings",
             null,
             ContentValues().apply {
-                put("key", FOLDER_ICON_STYLE)
-                put("value", style)
+                put("key", key)
+                put("value", value)
             },
             SQLiteDatabase.CONFLICT_REPLACE
         )
@@ -315,6 +328,43 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         db.execSQL("CREATE TABLE IF NOT EXISTS manual_uncategorized (package_name TEXT PRIMARY KEY)")
     }
 
+    private fun createFolderIndexTable(db: SQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS folder_index (package_name TEXT PRIMARY KEY, folder_id TEXT NOT NULL)"
+        )
+    }
+
+    private fun validateFolderIndex(values: List<Pair<String, String>>) {
+        val folderIds = folders().map { it.id }.toSet() + UNCATEGORIZED
+        values.forEach { (packageName, folderId) ->
+            require(packageName.isNotEmpty()) { "app package 不可空白" }
+            require(folderId in folderIds) { "$packageName 指定了不存在的資料夾：$folderId" }
+        }
+    }
+
+    private fun replaceFolderIndex(db: SQLiteDatabase, values: List<Pair<String, String>>) {
+        db.delete("folder_index", null, null)
+        values.forEach { (packageName, folderId) ->
+            db.insertOrThrow(
+                "folder_index",
+                null,
+                ContentValues().apply {
+                    put("package_name", packageName)
+                    put("folder_id", folderId)
+                }
+            )
+        }
+        db.insertWithOnConflict(
+            "settings",
+            null,
+            ContentValues().apply {
+                put("key", FOLDER_INDEX_READY)
+                put("value", "1")
+            },
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
     private fun mergeDefaultFolders(db: SQLiteDatabase) {
         DEFAULT_FOLDERS.forEach { folder ->
             val storedKeywords = mutableListOf<String>()
@@ -326,20 +376,18 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
                 if (!exists) saveFolder(db, folder.id, folder.name, folder.keywords, false, folder.category)
                 return@forEach
             }
-            val legacy = LEGACY_DEFAULT_FOLDERS.firstOrNull { it.id == folder.id } ?: return@forEach
-            if (storedKeywords.toSet() == legacy.keywords.toSet()) {
-                folder.keywords.filterNot { it in storedKeywords }.forEach { keyword ->
-                    db.insertOrThrow("keywords", null, ContentValues().apply {
-                        put("folder_id", folder.id)
-                        put("keyword", keyword)
-                    })
-                }
+            DEFAULT_APP_NAMES[folder.id].orEmpty().filterNot { it in storedKeywords }.forEach { keyword ->
+                db.insertOrThrow("keywords", null, ContentValues().apply {
+                    put("folder_id", folder.id)
+                    put("keyword", keyword)
+                })
             }
         }
     }
 
     private companion object {
         const val FOLDER_ICON_STYLE = "folder_icon_style"
+        const val FOLDER_INDEX_READY = "folder_index_ready"
         val LEGACY_DEFAULT_FOLDERS = listOf(
             OrganizerFolder("communication", "通訊", listOf("chat", "message", "messenger", "sms", "mail", "gmail", "line", "telegram", "whatsapp", "signal", "discord", "zoom", "meet", "phone", "contacts"), ApplicationInfo.CATEGORY_SOCIAL, false),
             OrganizerFolder("social", "社群", listOf("facebook", "instagram", "threads", "twitter", "tiktok", "reddit", "plurk", "social"), ApplicationInfo.CATEGORY_SOCIAL, false),
@@ -357,23 +405,23 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         )
 
         val DEFAULT_APP_NAMES = mapOf(
-            "communication" to listOf("Carrier Services", "Discord - Talk, Play, Hang Out", "Firefox Fast & Private Browser", "FolderSync Pro", "Google Chat", "Google Pixel Watch", "LINE: Calls & Messages", "Messenger", "Samsung Accessory Service", "Telegram", "Thunderbird: Free Your Inbox", "Google Meet"),
+            "communication" to listOf("Carrier Services", "Discord - Talk, Play, Hang Out", "Firefox Fast & Private Browser", "FolderSync Pro", "Google Chat", "Google Pixel Watch", "LINE: Calls & Messages", "Messenger", "Samsung Accessory Service", "Telegram", "Thunderbird: Free Your Inbox", "Google Meet", "電話"),
             "social" to listOf("巴哈姆特 - 華人最大電玩動漫社群網站", "Facebook", "Gleezy Pro", "Instagram", "Message Peeping Tom", "Mobile01", "Threads", "X"),
             "video" to listOf("GoPro Quik: Video Editor", "VLC for Android", "MX Player Pro"),
             "music" to listOf("AntennaPod - Podcast Player", "foobar2000", "Google Pixel Buds", "Marshall", "Neutron Music Player", "XROUND MyTune"),
-            "photo" to listOf("Gallery", "PhotoScan by Google Photos", "Snapseed", "Synology Photos", "Microsoft Lens"),
-            "game" to listOf("Sudokuplus.net -classic sudoku"),
+            "photo" to listOf("Gallery", "PhotoScan by Google Photos", "Snapseed", "Synology Photos", "Microsoft Lens", "畫廊", "Pixon"),
+            "game" to listOf("Sudokuplus.net -classic sudoku", "Water? 2"),
             "maps" to listOf("55688 Taiwan Taxi", "WeMo - 24H Scooter Sharing"),
-            "finance" to listOf("【富貴角10號】sk88新光證券", "台新銀行 「行動銀行」", "國泰世華 行動銀行", "發票存摺：電子發票兌獎、載具歸戶神器", "街口支付", "集保e手掌握(集保e存摺/手機存摺)", "新光銀行", "AndroMoney ( Expense Track )", "Binance: Buy Bitcoin & Crypto", "Easy Wallet 悠遊付", "Fubon+ Mobile Banking", "Google Wallet", "Kraken Pro: Advanced Trading", "MAX Exchange - Buy Bitcoin"),
-            "shopping" to listOf("健身工廠商城", "蝦皮購物 | 花得更少買得更好", "露天市集", "Amazon Shopping", "AppSales", "momo購物 | 值得信賴的購物首選", "PChome24h購物 | 每天一起變更好", "Rakuten樂天市場購物網", "Yahoo拍賣"),
+            "finance" to listOf("【富貴角10號】sk88新光證券", "台新銀行 「行動銀行」", "國泰世華 行動銀行", "發票存摺：電子發票兌獎、載具歸戶神器", "街口支付", "集保e手掌握(集保e存摺/手機存摺)", "新光銀行", "AndroMoney ( Expense Track )", "Binance: Buy Bitcoin & Crypto", "Easy Wallet 悠遊付", "Fubon+ Mobile Banking", "Google Wallet", "Kraken Pro: Advanced Trading", "MAX Exchange - Buy Bitcoin", "新光人壽", "新光行動保鏢"),
+            "shopping" to listOf("健身工廠商城", "蝦皮購物 | 花得更少買得更好", "露天市集", "Amazon Shopping", "AppSales", "momo購物 | 值得信賴的購物首選", "PChome24h購物 | 每天一起變更好", "Rakuten樂天市場購物網", "Yahoo拍賣", "Pinkoi", "拍賣", "生活市集", "寵物公園"),
             "work" to listOf("網紅小遙", "AutoApps", "Calendar Widget (key)", "Calendar Widget Month + Agenda", "ChatGPT", "EinkBro", "Gemini Notebook", "Google Docs", "Google One", "Google Sheets", "Joplin", "Link to Windows", "MEGA", "Miniflutt for Miniflux", "Qmanager", "QR & Barcode Scanner Pro", "Solid Explorer File Manager", "spacedesk - USB Display for PC", "Synology Drive", "EZ WAY 易利委", "Microsoft Authenticator", "MyASUS - Service Center", "Termius - Modern SSH Client", "Windows App"),
-            "tools" to listOf("1.1.1.1 + WARP: Safer Internet", "1DM+: Browser & Video Download", "3C All-in-One Toolbox", "3C All-in-One Toolbox Pro key", "8BitDo Ultimate Software", "中華電信", "中華網安助手", "寶島眼鏡", "Aegis Authenticator - 2FA App", "Anker Power", "ASUS Router", "Bluetooth Keyboard & Mouse Pro", "Chameleon Ultra GUI", "Cx File Explorer", "DNSChanger for IPv4/IPv6", "DS finder", "DS get", "DS router", "FloleVac", "Galaxy Fit3 Plugin", "Galaxy Wearable", "Google Authenticator", "Google Family Link", "Google Translate", "IINE", "Keepass2Android Password Safe", "MTools BLE - BLE RFID Reader", "OpenVPN Connect", "Quick Ball", "SD Maid 2/SE - System Cleaner", "Smart Tools 2", "Sony | Sound Connect", "Speedtest by Ookla", "Synology Secure SignIn", "TWDIW", "V380 Pro", "ZArchiver Donate", "AriaNgGUI", "BlueTask", "SamQuickSetting", "SamAppOrganizer", "AI Input Widget", "LocalSend", "Obtainium", "Torrent Search", "LIME", "Quick Settings Tiles", "Blizzard Authenticator", "Beacon Scanner", "Website Shortcut", "findPacket", "seClock", "RustDesk", "Tasker"),
+            "tools" to listOf("1.1.1.1 + WARP: Safer Internet", "1DM+: Browser & Video Download", "1DM+", "3C All-in-One Toolbox", "3C All-in-One Toolbox Pro key", "8BitDo Ultimate Software", "中華電信", "中華網安助手", "寶島眼鏡", "Aegis Authenticator - 2FA App", "Anker Power", "ASUS Router", "Bluetooth Keyboard & Mouse Pro", "Chameleon Ultra GUI", "Chameleon", "Cx File Explorer", "CX檔案總管", "DNSChanger for IPv4/IPv6", "DS finder", "DS get", "DS router", "DS file", "Qfile Pro", "FloleVac", "Galaxy Fit3 Plugin", "Galaxy Wearable", "Google Authenticator", "Google Family Link", "Google Translate", "IINE", "Keepass2Android Password Safe", "MTools BLE - BLE RFID Reader", "OpenVPN Connect", "Quick Ball", "QuickShortcutMaker", "Sauce Finder", "Signal Strength", "愛字體", "萊姆輸入法", "藍光過濾", "設備訊息", "驗證器", "PrinterShare", "Net Signal Pro", "SD Maid 2/SE - System Cleaner", "Smart Tools 2", "Sony | Sound Connect", "Speedtest by Ookla", "Synology Secure SignIn", "TWDIW", "V380 Pro", "ZArchiver Donate", "AriaNgGUI", "BlueTask", "SamQuickSetting", "SamAppOrganizer", "AI Input Widget", "LocalSend", "Obtainium", "Torrent Search", "LIME", "Quick Settings Tiles", "Blizzard Authenticator", "Beacon Scanner", "Website Shortcut", "findPacket", "seClock", "RustDesk", "Tasker", "App Cloner", "App Cloner Premium & Add-ons", "APP分享器"),
             "news" to listOf("Google News - Daily Headlines", "Medium: Read & Write Stories"),
-            "reading" to listOf("輕鬆讀小說", "Amazon Kindle: Reading App", "BooxReader: EPUB Reader & PDF", "CalliPlus Chinese Calligraphy", "Google Play Books & Audiobooks", "HyRead 電子書 - 立即借圖書館小說雜誌影音書", "Kobo | eBooks & Audiobooks", "Librera PRO - Book reader", "Moon+ Reader Pro", "ReadEra Premium - ebook reader", "Readest: EPUB & PDF Reader", "Readmoo 看書", "Reasily - EPUB Reader", "Books OPDS"),
-            "comic" to listOf("CDisplayEx Comic Reader", "Perfect Viewer", "Perfect Viewer X", "Renta！亂搭－正版漫畫小說天天更新", "WEBTOON: Manga, Comics, Manhwa", "EHViewer", "SamComic"),
-            "health" to listOf("我的健身工廠 My Fitness Factory", "Google Fit: Activity Tracking", "Google Health (Fitbit)", "Health Connect", "Nearby Nirvana", "Samsung Health", "全民健保行動快易通 | 健康存摺", "FreeStyle LibreLink - TW"),
-            "home" to listOf("Home Assistant", "Google Home", "Roborock", "SwitchBot", "TP-Link Tapo", "Xiaomi Home", "Yeelight Classic"),
-            "life" to listOf("有OPENPOINT真好", "誠品 TW", "Hi-Life VIP", "Invoice Prize Redemption", "Journal", "Nintendo Switch Parental Controls", "surco", "Uber Eats: Food Delivery"),
+            "reading" to listOf("輕鬆讀小說", "Amazon Kindle: Reading App", "BooxReader: EPUB Reader & PDF", "CalliPlus Chinese Calligraphy", "Google Play Books & Audiobooks", "HyRead 電子書 - 立即借圖書館小說雜誌影音書", "Kobo | eBooks & Audiobooks", "Librera PRO - Book reader", "Moon+ Reader Pro", "ReadEra Premium - ebook reader", "Readest: EPUB & PDF Reader", "Readmoo 看書", "Reasily - EPUB Reader", "Books OPDS", "Calibre Web Companion", "QDict", "古典詩詞精選", "王羲之書法字典", "閱星曈", "閱讀", "Z-Lib", "WikiReader", "momoBOOK", "Memorize", "誠品TW"),
+            "comic" to listOf("CDisplayEx Comic Reader", "CDisplayEx", "Perfect Viewer", "Perfect Viewer X", "Renta！亂搭－正版漫畫小說天天更新", "WEBTOON: Manga, Comics, Manhwa", "EHViewer", "SamComic", "CCC追漫台", "拷貝漫畫", "漫画人", "サンデーうぇぶり"),
+            "health" to listOf("我的健身工廠 My Fitness Factory", "Google Fit: Activity Tracking", "Fit", "Google Health (Fitbit)", "Health", "Health Connect", "Nearby Nirvana", "舒壓地圖", "Samsung Health", "全民健保行動快易通 | 健康存摺", "健保快易通", "FreeStyle LibreLink - TW", "Zepp Life", "MedTimer"),
+            "home" to listOf("Home Assistant", "Google Home", "Roborock", "SwitchBot", "TP-Link Tapo", "Xiaomi Home", "Yeelight Classic", "Yeelight", "eWeLink"),
+            "life" to listOf("有OPENPOINT真好", "誠品 TW", "Hi-Life VIP", "Invoice Prize Redemption", "Journal", "Nintendo Switch Parental Controls", "surco", "Uber Eats: Food Delivery", "Pinterest", "麥當勞歡樂送"),
             "entertainment" to listOf("巴哈姆特動畫瘋", "Battle.net", "Nintendo Switch App", "pixiv", "Steam", "TagMo", "Twitch: Live Streaming"),
             "weather" to listOf("中央氣象署E - 地震測報", "Taiwan Weather", "Weather & Widget - Weawow")
         )

@@ -28,6 +28,7 @@ class MainActivity : Activity() {
     private var pendingFolderScrollY: Int? = null
 
     private data class ImportedOrganizer(
+        val version: Int,
         val folders: List<OrganizerFolder>,
         val assignments: Map<String, String>?
     )
@@ -50,7 +51,17 @@ class MainActivity : Activity() {
                 IMPORT_FOLDERS -> contentResolver.openInputStream(uri)?.bufferedReader()?.use {
                     val imported = parseFoldersJson(it.readText())
                     val count = db.importFolders(imported.folders)
-                    val assignmentCount = imported.assignments?.let(db::importAssignments)
+                    val assignmentCount = imported.assignments?.let { assignments ->
+                        if (imported.version >= 3) {
+                            db.importAssignments(assignments)
+                        } else {
+                            rebuildFolderIndex(assignments)
+                            assignments.size
+                        }
+                    } ?: run {
+                        rebuildFolderIndex()
+                        null
+                    }
                     FolderWidgetProvider.updateAll(this)
                     showFolders()
                     val message = if (assignmentCount == null) {
@@ -70,6 +81,7 @@ class MainActivity : Activity() {
         atRoot = true
         openFolderId = null
         filterQuery = null
+        ensureFolderIndex()
         val folders = db.folders()
         val grouped = groupedApps(folders)
         val iconStyle = db.iconStyle()
@@ -103,7 +115,7 @@ class MainActivity : Activity() {
                     rightMargin = dp(6)
                 }
             })
-            addView(actionButton("篩選 app") { showFilterDialog() }.apply {
+            addView(actionButton("搜尋 app") { showFilterDialog() }.apply {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                     leftMargin = dp(6)
                 }
@@ -173,7 +185,7 @@ class MainActivity : Activity() {
     }
 
     private fun exportFoldersJson(): String = JSONObject().apply {
-        put("version", 2)
+        put("version", 3)
         put("folders", JSONArray().apply {
             db.folders().forEach { folder ->
                 put(JSONObject().apply {
@@ -186,7 +198,7 @@ class MainActivity : Activity() {
             }
         })
         put("assignments", JSONObject().apply {
-            db.assignments().forEach { (packageName, folderId) -> put(packageName, folderId) }
+            db.folderIndex().forEach { (packageName, folderId) -> put(packageName, folderId) }
         })
     }.toString(2)
 
@@ -214,7 +226,7 @@ class MainActivity : Activity() {
                 }
             }
         }
-        return ImportedOrganizer(folders, assignments)
+        return ImportedOrganizer(source.optInt("version", 1), folders, assignments)
     }
 
     @Suppress("OVERRIDE_DEPRECATION")
@@ -258,6 +270,9 @@ class MainActivity : Activity() {
                 rememberFolderListScroll()
                 if (isNew) db.addFolder(nameInput.text.toString(), keywords)
                 else db.updateFolder(folder!!, nameInput.text.toString(), keywords)
+                if (isNew || folderSettingsChanged(folder!!, nameInput.text.toString(), keywords)) {
+                    rebuildFolderIndex()
+                }
                 FolderWidgetProvider.updateAll(this)
                 showCurrentPage()
             }
@@ -269,6 +284,7 @@ class MainActivity : Activity() {
         deleteButton?.setOnClickListener {
             rememberFolderListScroll()
             db.deleteFolder(folder!!.id)
+            rebuildFolderIndex()
             FolderWidgetProvider.updateAll(this)
             dialog.dismiss()
             showCurrentPage()
@@ -286,7 +302,12 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(app.label)
             .setItems(labels) { _, index ->
-                db.setAssignment(app.packageName, if (index == 0) null else folders[index - 1].id)
+                val folderId = if (index == 0) {
+                    automaticFolderId(app, folders)
+                } else {
+                    folders[index - 1].id
+                }
+                db.updateFolderIndex(app.packageName, folderId)
                 FolderWidgetProvider.updateAll(this)
                 Toast.makeText(this, "已更新分類", Toast.LENGTH_SHORT).show()
                 showCurrentPage()
@@ -295,6 +316,7 @@ class MainActivity : Activity() {
     }
 
     private fun refreshClassification() {
+        rebuildFolderIndex()
         FolderWidgetProvider.updateAll(this)
         Toast.makeText(this, "已重新掃描並歸類 app", Toast.LENGTH_SHORT).show()
         showFolders()
@@ -319,8 +341,8 @@ class MainActivity : Activity() {
     private fun showFilterDialog() {
         val input = EditText(this).apply { hint = "app 名稱或 package" }
         val dialog = AlertDialog.Builder(this)
-            .setTitle("篩選 app")
-            .setView(input)
+            .setTitle("搜尋 app")
+            .setView(input.apply { hint = "app 名稱或 package" })
             .setPositiveButton("送出", null)
             .setNeutralButton("清除", null)
             .create()
@@ -342,16 +364,20 @@ class MainActivity : Activity() {
         atRoot = false
         openFolderId = null
         filterQuery = query
-        val apps = OrganizerModel.loadApps(this).filter {
+        val folders = db.folders()
+        val folderNames = (folders + OrganizerModel.uncategorizedFolder()).associate { it.id to it.name }
+        val folderByPackage = db.folderIndex()
+        val allApps = OrganizerModel.loadIndexedApps(this, folderByPackage.keys)
+        val apps = allApps.filter {
             it.label.contains(query, ignoreCase = true) || it.packageName.contains(query, ignoreCase = true)
         }
         val root = rootLayout()
         root.addView(actionButton("返回") { showFolders() })
-        root.addView(label("篩選結果 (${apps.size})", 28f, 0xFF202124.toInt(), Gravity.CENTER).apply {
+        root.addView(label("搜尋結果 (${apps.size})", 28f, 0xFF202124.toInt(), Gravity.CENTER).apply {
             setPadding(0, dp(12), 0, dp(8))
         })
         if (apps.isEmpty()) root.addView(label("沒有符合的 app。", 16f, 0xFF5F6368.toInt(), Gravity.CENTER))
-        else apps.forEach { root.addView(appRow(it)) }
+        else apps.forEach { root.addView(appRow(it, folderNames[folderByPackage[it.packageName]])) }
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
@@ -361,7 +387,7 @@ class MainActivity : Activity() {
         filterQuery = null
         val folders = db.folders()
         val apps = OrganizerModel.loadApps(this)
-        val initiallySelected = groupedApps(folders)[folder.id].orEmpty().mapTo(mutableSetOf()) { it.packageName }
+        val initiallySelected = db.indexedPackages(folder.id).toMutableSet()
         val selected = initiallySelected.toMutableSet()
         val root = rootLayout()
         root.addView(actionButton("返回") {
@@ -396,9 +422,9 @@ class MainActivity : Activity() {
         root.addView(actionButton("儲存") {
             apps.forEach { app ->
                 when {
-                    app.packageName in selected -> db.setAssignment(app.packageName, folder.id)
+                    app.packageName in selected -> db.updateFolderIndex(app.packageName, folder.id)
                     app.packageName !in selected && app.packageName in initiallySelected ->
-                        db.setAssignment(app.packageName, UNCATEGORIZED)
+                        db.updateFolderIndex(app.packageName, automaticFolderId(app, folders))
                 }
             }
             FolderWidgetProvider.updateAll(this)
@@ -408,8 +434,43 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
-    private fun groupedApps(folders: List<OrganizerFolder>): Map<String, List<AppItem>> =
-        OrganizerModel.classify(OrganizerModel.loadApps(this), folders, db.assignments())
+    private fun groupedApps(folders: List<OrganizerFolder>): Map<String, List<AppItem>> {
+        val indexedPackages = (folders + OrganizerModel.uncategorizedFolder())
+            .associate { it.id to mutableListOf<String>() }
+            .toMutableMap()
+        db.folderIndex().forEach { (packageName, folderId) ->
+            indexedPackages[folderId]?.add(packageName)
+                ?: indexedPackages.getValue(UNCATEGORIZED).add(packageName)
+        }
+        return indexedPackages.mapValues { (_, packageNames) ->
+            OrganizerModel.loadIndexedApps(this, packageNames)
+        }
+    }
+
+    private fun ensureFolderIndex() {
+        if (!db.isFolderIndexReady()) {
+            rebuildFolderIndex(db.folderIndex())
+            FolderWidgetProvider.updateAll(this)
+        }
+    }
+
+    private fun rebuildFolderIndex(overrides: Map<String, String> = emptyMap()) {
+        val folders = db.folders()
+        val validFolderIds = folders.map { it.id }.toSet() + UNCATEGORIZED
+        val index = linkedMapOf<String, String>()
+        OrganizerModel.classify(OrganizerModel.loadApps(this), folders, emptyMap())
+            .forEach { (folderId, apps) -> apps.forEach { index[it.packageName] = folderId } }
+        index.putAll(overrides.filterValues { it in validFolderIds })
+        db.replaceFolderIndex(index)
+    }
+
+    private fun automaticFolderId(app: AppItem, folders: List<OrganizerFolder>): String =
+        OrganizerModel.classify(listOf(app), folders.filter { it.id != UNCATEGORIZED }, emptyMap())
+            .entries.first { app in it.value }.key
+
+    private fun folderSettingsChanged(folder: OrganizerFolder, name: String, keywords: List<String>): Boolean =
+        folder.name != name.trim() ||
+            folder.keywords != keywords.distinct()
 
     private fun showCurrentPage() {
         filterQuery?.let {
@@ -465,7 +526,7 @@ class MainActivity : Activity() {
             })
         }
 
-    private fun appRow(app: AppItem): View =
+    private fun appRow(app: AppItem, folderName: String? = null): View =
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -485,7 +546,12 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 addView(label(app.label, 18f, 0xFF202124.toInt(), Gravity.START))
-                addView(label(app.packageName, 13f, 0xFF5F6368.toInt(), Gravity.START))
+                addView(label(
+                    folderName?.let { "資料夾：$it\n${app.packageName}" } ?: app.packageName,
+                    13f,
+                    0xFF5F6368.toInt(),
+                    Gravity.START
+                ).apply { maxLines = 2 })
             })
         }
 

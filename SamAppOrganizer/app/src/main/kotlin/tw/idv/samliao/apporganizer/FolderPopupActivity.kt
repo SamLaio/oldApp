@@ -35,11 +35,6 @@ class FolderPopupActivity : Activity() {
             finish()
             return
         }
-        val apps = OrganizerModel.classify(
-            OrganizerModel.loadApps(this),
-            folders,
-            db.assignments()
-        )[folder.id].orEmpty()
 
         val root = FrameLayout(this).apply {
             setBackgroundColor(0x99000000.toInt())
@@ -68,13 +63,29 @@ class FolderPopupActivity : Activity() {
                 true
             }
         })
-        content.addView(GridLayout(this).apply {
-            columnCount = 3
-            apps.forEach { app -> addView(appCell(app)) }
-        })
+        val loading = TextView(this).apply {
+            text = "載入中…"
+            textSize = 15f
+            setTextColor(0xFFFFFFFF.toInt())
+            gravity = Gravity.CENTER
+            setPadding(0, dp(12), 0, dp(12))
+        }
+        content.addView(loading)
         panel.addView(content)
         root.addView(panel)
         setContentView(root)
+
+        Thread {
+            val apps = OrganizerModel.loadIndexedApps(this, db.indexedPackages(folder.id))
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                content.removeView(loading)
+                content.addView(GridLayout(this).apply {
+                    columnCount = 3
+                    apps.forEach { app -> addView(appCell(app)) }
+                })
+            }
+        }.start()
     }
 
     private fun appCell(app: AppItem): View =

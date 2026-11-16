@@ -37,6 +37,23 @@ object OrganizerModel {
             .distinctBy { it.packageName }
             .sortedBy { it.label.lowercase(Locale.US) }
 
+    fun loadIndexedApps(context: Context, packageNames: Collection<String>): List<AppItem> {
+        val packageManager = context.packageManager
+        return packageNames.distinct().mapNotNull { packageName ->
+            val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return@mapNotNull null
+            val resolveInfo = packageManager.resolveActivity(intent, 0) ?: return@mapNotNull null
+            val activityInfo = resolveInfo.activityInfo ?: return@mapNotNull null
+            val appInfo = activityInfo.applicationInfo ?: return@mapNotNull null
+            AppItem(
+                label = resolveInfo.loadLabel(packageManager).toString(),
+                packageName = packageName,
+                category = appInfo.category,
+                isSystem = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0,
+                icon = resolveInfo.loadIcon(packageManager)
+            )
+        }.sortedBy { it.label.lowercase(Locale.US) }
+    }
+
     fun classify(
         apps: List<AppItem>,
         folders: List<OrganizerFolder>,

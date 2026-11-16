@@ -41,16 +41,11 @@ class FolderWidgetProvider : AppWidgetProvider() {
             val db = AppOrganizerDb(context)
             val folderId = db.widgetFolder(appWidgetId)
             val iconStyle = db.iconStyle()
-            val folders = db.folders()
-            val folder = (folders + OrganizerModel.uncategorizedFolder()).firstOrNull { it.id == folderId }
+            val folder = (db.folders() + OrganizerModel.uncategorizedFolder()).firstOrNull { it.id == folderId }
             val apps = if (folder == null) {
                 emptyList()
             } else {
-                OrganizerModel.classify(
-                    OrganizerModel.loadApps(context),
-                    folders,
-                    db.assignments()
-                )[folder.id].orEmpty()
+                OrganizerModel.loadIndexedApps(context, db.indexedPackages(folder.id).take(4))
             }
 
             val views = RemoteViews(context.packageName, R.layout.widget_folder_icon)

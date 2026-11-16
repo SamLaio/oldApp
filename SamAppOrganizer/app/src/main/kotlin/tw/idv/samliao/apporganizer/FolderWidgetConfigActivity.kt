@@ -32,11 +32,6 @@ class FolderWidgetConfigActivity : Activity() {
     private fun showFolders() {
         val folders = db.folders() + OrganizerModel.uncategorizedFolder()
         val iconStyle = db.iconStyle()
-        val grouped = OrganizerModel.classify(
-            OrganizerModel.loadApps(this),
-            db.folders(),
-            db.assignments()
-        )
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(36), dp(20), dp(24))
@@ -44,7 +39,7 @@ class FolderWidgetConfigActivity : Activity() {
         }
         root.addView(label("選擇小工具資料夾", 26f, 0xFF202124.toInt(), Gravity.CENTER))
         folders.forEach { folder ->
-            root.addView(folderRow(folder, grouped[folder.id].orEmpty(), iconStyle))
+            root.addView(folderRow(folder, OrganizerModel.loadIndexedApps(this, db.indexedPackages(folder.id)), iconStyle))
         }
         setContentView(ScrollView(this).apply { addView(root) })
     }
