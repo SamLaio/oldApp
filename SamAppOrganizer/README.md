@@ -6,8 +6,8 @@
 
 - app 名稱：`SamAppOrganizer`
 - package / applicationId：`tw.idv.samliao.apporganizer`
-- 版本：`0.5.4`
-- `versionCode`：`9`
+- 版本：`0.5.5`
+- `versionCode`：`10`
 - 最低版本：Android 10，`minSdk 29`
 - `targetSdk` / `compileSdk`：`35`
 - 技術：原生 Android Kotlin，無第三方 UI 框架。
@@ -18,6 +18,7 @@
 - 主畫面可手動重新整理，重新掃描 app、重新歸類並重建分類索引與桌面小工具。
 - 用 SQLite 保存資料夾、關鍵字、全域圖示風格與最終分類索引，方便後續搬移與備份。
 - 依資料夾關鍵字、Android app category 與 package/app 名稱自動分類。
+- 分類索引會記錄來源權重：未分類 10、Android 類別 20、關鍵字 50、手動指定 90；較高權重會保留。
 - 資料夾列表會顯示資料夾預覽圖示。
 - 分類內 app 以類 launcher 清單顯示 app 圖示、名稱與 package。
 - 長按資料夾可改名稱與關鍵字。

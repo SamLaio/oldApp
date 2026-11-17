@@ -6,7 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organizer.db", null, 10) {
+class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organizer.db", null, 13) {
     override fun onConfigure(db: SQLiteDatabase) {
         db.setForeignKeyConstraintsEnabled(true)
     }
@@ -58,6 +58,13 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
             db.execSQL("INSERT OR REPLACE INTO folder_index(package_name, folder_id) SELECT package_name, folder_id FROM assignments")
             db.execSQL("INSERT OR REPLACE INTO folder_index(package_name, folder_id) SELECT package_name, '$UNCATEGORIZED' FROM manual_uncategorized")
         }
+        if (oldVersion < 11) mergeDefaultFolders(db)
+        if (oldVersion < 12) {
+            db.execSQL("ALTER TABLE folder_index ADD COLUMN weight INTEGER NOT NULL DEFAULT 20")
+            db.execSQL("UPDATE folder_index SET weight = 90 WHERE package_name IN (SELECT package_name FROM assignments)")
+            db.execSQL("UPDATE folder_index SET weight = 90 WHERE package_name IN (SELECT package_name FROM manual_uncategorized)")
+        }
+        if (oldVersion < 13) mergeDefaultFolders(db)
     }
 
     fun folders(): List<OrganizerFolder> {
@@ -122,7 +129,9 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         validateFolderIndex(values)
         writableDatabase.beginTransaction()
         try {
-            replaceFolderIndex(writableDatabase, values)
+            replaceFolderIndex(writableDatabase, values.associate { (packageName, folderId) ->
+                packageName to FolderIndexEntry(folderId, 90)
+            })
             writableDatabase.setTransactionSuccessful()
             return values.size
         } finally {
@@ -152,6 +161,16 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         return result
     }
 
+    fun folderIndexEntries(): Map<String, FolderIndexEntry> {
+        val result = mutableMapOf<String, FolderIndexEntry>()
+        readableDatabase.rawQuery("SELECT package_name, folder_id, weight FROM folder_index", emptyArray()).use { cursor ->
+            while (cursor.moveToNext()) {
+                result[cursor.getString(0)] = FolderIndexEntry(cursor.getString(1), cursor.getInt(2))
+            }
+        }
+        return result
+    }
+
     fun indexedPackages(folderId: String): List<String> =
         readableDatabase.rawQuery(
             "SELECT package_name FROM folder_index WHERE folder_id = ? ORDER BY package_name",
@@ -164,19 +183,19 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
 
     fun isFolderIndexReady(): Boolean = setting(FOLDER_INDEX_READY) == "1"
 
-    fun replaceFolderIndex(index: Map<String, String>) {
-        val values = index.map { it.key.trim() to it.value.trim() }
+    fun replaceFolderIndex(index: Map<String, FolderIndexEntry>) {
+        val values = index.map { it.key.trim() to it.value.folderId.trim() }
         validateFolderIndex(values)
         writableDatabase.beginTransaction()
         try {
-            replaceFolderIndex(writableDatabase, values)
+            replaceFolderIndex(writableDatabase, index)
             writableDatabase.setTransactionSuccessful()
         } finally {
             writableDatabase.endTransaction()
         }
     }
 
-    fun updateFolderIndex(packageName: String, folderId: String) {
+    fun updateFolderIndex(packageName: String, folderId: String, weight: Int = 90) {
         require(packageName.isNotBlank()) { "app package 不可空白" }
         require(folderId == UNCATEGORIZED || folders().any { it.id == folderId }) {
             "$packageName 指定了不存在的資料夾：$folderId"
@@ -187,6 +206,7 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
             ContentValues().apply {
                 put("package_name", packageName)
                 put("folder_id", folderId)
+                put("weight", weight)
             },
             SQLiteDatabase.CONFLICT_REPLACE
         )
@@ -330,7 +350,7 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
 
     private fun createFolderIndexTable(db: SQLiteDatabase) {
         db.execSQL(
-            "CREATE TABLE IF NOT EXISTS folder_index (package_name TEXT PRIMARY KEY, folder_id TEXT NOT NULL)"
+            "CREATE TABLE IF NOT EXISTS folder_index (package_name TEXT PRIMARY KEY, folder_id TEXT NOT NULL, weight INTEGER NOT NULL)"
         )
     }
 
@@ -342,15 +362,16 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
         }
     }
 
-    private fun replaceFolderIndex(db: SQLiteDatabase, values: List<Pair<String, String>>) {
+    private fun replaceFolderIndex(db: SQLiteDatabase, values: Map<String, FolderIndexEntry>) {
         db.delete("folder_index", null, null)
-        values.forEach { (packageName, folderId) ->
+        values.forEach { (packageName, entry) ->
             db.insertOrThrow(
                 "folder_index",
                 null,
                 ContentValues().apply {
                     put("package_name", packageName)
-                    put("folder_id", folderId)
+                    put("folder_id", entry.folderId)
+                    put("weight", entry.weight)
                 }
             )
         }
@@ -376,7 +397,7 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
                 if (!exists) saveFolder(db, folder.id, folder.name, folder.keywords, false, folder.category)
                 return@forEach
             }
-            DEFAULT_APP_NAMES[folder.id].orEmpty().filterNot { it in storedKeywords }.forEach { keyword ->
+            defaultAppNames(folder.id).filterNot { it in storedKeywords }.forEach { keyword ->
                 db.insertOrThrow("keywords", null, ContentValues().apply {
                     put("folder_id", folder.id)
                     put("keyword", keyword)
@@ -426,16 +447,33 @@ class AppOrganizerDb(context: Context) : SQLiteOpenHelper(context, "app_organize
             "weather" to listOf("中央氣象署E - 地震測報", "Taiwan Weather", "Weather & Widget - Weawow")
         )
 
+        val PIXEL_APP_ALIASES = mapOf(
+            "communication" to listOf("Thunderbird", "Watch", "dialer"),
+            "social" to listOf("巴哈姆特", "已讀不回"),
+            "finance" to listOf("fubon", "taishinbank", "cathaybk", "invoice", "wallet"),
+            "work" to listOf("連結至 Windows"),
+            "tools" to listOf("CU GUI", "songpal", "良值"),
+            "reading" to listOf("Kindle", "Readest"),
+            "comic" to listOf("Komikku", "Renta！亂搭", "WEBTOON"),
+            "health" to listOf("freestyle", "健身工廠"),
+            "home" to listOf("Tapo", "米家"),
+            "life" to listOf("OPENPOINT", "日記"),
+            "weather" to listOf("Weawow")
+        )
+
+        fun defaultAppNames(folderId: String): List<String> =
+            DEFAULT_APP_NAMES[folderId].orEmpty() + PIXEL_APP_ALIASES[folderId].orEmpty()
+
         val DEFAULT_FOLDERS = LEGACY_DEFAULT_FOLDERS.map { folder ->
-            folder.copy(keywords = folder.keywords + DEFAULT_APP_NAMES[folder.id].orEmpty())
+            folder.copy(keywords = folder.keywords + defaultAppNames(folder.id))
         } + listOf(
-            OrganizerFolder("reading", "閱讀", DEFAULT_APP_NAMES.getValue("reading"), null, false),
-            OrganizerFolder("comic", "漫畫", DEFAULT_APP_NAMES.getValue("comic"), null, false),
-            OrganizerFolder("health", "健康", DEFAULT_APP_NAMES.getValue("health"), null, false),
-            OrganizerFolder("home", "智慧家庭", DEFAULT_APP_NAMES.getValue("home"), null, false),
-            OrganizerFolder("life", "生活", DEFAULT_APP_NAMES.getValue("life"), null, false),
-            OrganizerFolder("entertainment", "娛樂", DEFAULT_APP_NAMES.getValue("entertainment"), null, false),
-            OrganizerFolder("weather", "天氣", DEFAULT_APP_NAMES.getValue("weather"), null, false)
+            OrganizerFolder("reading", "閱讀", defaultAppNames("reading"), null, false),
+            OrganizerFolder("comic", "漫畫", defaultAppNames("comic"), null, false),
+            OrganizerFolder("health", "健康", defaultAppNames("health"), null, false),
+            OrganizerFolder("home", "智慧家庭", defaultAppNames("home"), null, false),
+            OrganizerFolder("life", "生活", defaultAppNames("life"), null, false),
+            OrganizerFolder("entertainment", "娛樂", defaultAppNames("entertainment"), null, false),
+            OrganizerFolder("weather", "天氣", defaultAppNames("weather"), null, false)
         )
     }
 }
@@ -447,3 +485,5 @@ data class OrganizerFolder(
     val category: Int?,
     val custom: Boolean
 )
+
+data class FolderIndexEntry(val folderId: String, val weight: Int)

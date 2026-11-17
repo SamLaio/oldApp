@@ -52,12 +52,7 @@ class MainActivity : Activity() {
                     val imported = parseFoldersJson(it.readText())
                     val count = db.importFolders(imported.folders)
                     val assignmentCount = imported.assignments?.let { assignments ->
-                        if (imported.version >= 3) {
-                            db.importAssignments(assignments)
-                        } else {
-                            rebuildFolderIndex(assignments)
-                            assignments.size
-                        }
+                        db.importAssignments(assignments)
                     } ?: run {
                         rebuildFolderIndex()
                         null
@@ -302,12 +297,12 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(app.label)
             .setItems(labels) { _, index ->
-                val folderId = if (index == 0) {
+                val target = if (index == 0) {
                     automaticFolderId(app, folders)
                 } else {
-                    folders[index - 1].id
+                    FolderTarget(folders[index - 1].id, 90)
                 }
-                db.updateFolderIndex(app.packageName, folderId)
+                db.updateFolderIndex(app.packageName, target.folderId, target.weight)
                 FolderWidgetProvider.updateAll(this)
                 Toast.makeText(this, "已更新分類", Toast.LENGTH_SHORT).show()
                 showCurrentPage()
@@ -424,7 +419,9 @@ class MainActivity : Activity() {
                 when {
                     app.packageName in selected -> db.updateFolderIndex(app.packageName, folder.id)
                     app.packageName !in selected && app.packageName in initiallySelected ->
-                        db.updateFolderIndex(app.packageName, automaticFolderId(app, folders))
+                        automaticFolderId(app, folders).let { target ->
+                            db.updateFolderIndex(app.packageName, target.folderId, target.weight)
+                        }
                 }
             }
             FolderWidgetProvider.updateAll(this)
@@ -449,24 +446,27 @@ class MainActivity : Activity() {
 
     private fun ensureFolderIndex() {
         if (!db.isFolderIndexReady()) {
-            rebuildFolderIndex(db.folderIndex())
+            rebuildFolderIndex()
             FolderWidgetProvider.updateAll(this)
         }
     }
 
-    private fun rebuildFolderIndex(overrides: Map<String, String> = emptyMap()) {
+    private fun rebuildFolderIndex() {
         val folders = db.folders()
         val validFolderIds = folders.map { it.id }.toSet() + UNCATEGORIZED
-        val index = linkedMapOf<String, String>()
-        OrganizerModel.classify(OrganizerModel.loadApps(this), folders, emptyMap())
-            .forEach { (folderId, apps) -> apps.forEach { index[it.packageName] = folderId } }
-        index.putAll(overrides.filterValues { it in validFolderIds })
+        val previous = db.folderIndexEntries()
+        val index = OrganizerModel.loadApps(this).associate { app ->
+            OrganizerModel.automaticTarget(app, folders).let { target ->
+                app.packageName to FolderIndexEntry(target.folderId, target.weight)
+            }
+        }.toMutableMap()
+        previous.filter { (_, entry) -> entry.weight == 90 && entry.folderId in validFolderIds }
+            .forEach { (packageName, entry) -> index[packageName] = entry }
         db.replaceFolderIndex(index)
     }
 
-    private fun automaticFolderId(app: AppItem, folders: List<OrganizerFolder>): String =
-        OrganizerModel.classify(listOf(app), folders.filter { it.id != UNCATEGORIZED }, emptyMap())
-            .entries.first { app in it.value }.key
+    private fun automaticFolderId(app: AppItem, folders: List<OrganizerFolder>): FolderTarget =
+        OrganizerModel.automaticTarget(app, folders.filter { it.id != UNCATEGORIZED })
 
     private fun folderSettingsChanged(folder: OrganizerFolder, name: String, keywords: List<String>): Boolean =
         folder.name != name.trim() ||

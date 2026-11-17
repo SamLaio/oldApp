@@ -16,6 +16,8 @@ data class AppItem(
     val icon: Drawable
 )
 
+data class FolderTarget(val folderId: String, val weight: Int)
+
 object OrganizerModel {
     private val systemKeywords = listOf("android", "settings", "packageinstaller", "permission")
 
@@ -68,17 +70,7 @@ object OrganizerModel {
                 return@forEach
             }
 
-            val ranked = folders
-                .map { it to score(app, it) }
-                .sortedByDescending { it.second }
-            val best = ranked.firstOrNull()
-            val secondScore = ranked.getOrNull(1)?.second ?: 0
-            val target = if (best != null && best.second >= 40 && best.second - secondScore >= 15) {
-                best.first.id
-            } else {
-                UNCATEGORIZED
-            }
-            grouped.getValue(target).add(app)
+            grouped.getValue(automaticTarget(app, folders).folderId).add(app)
         }
         return grouped.mapValues { it.value.sortedBy { app -> app.label.lowercase(Locale.US) } }
     }
@@ -86,25 +78,36 @@ object OrganizerModel {
     fun uncategorizedFolder(): OrganizerFolder =
         OrganizerFolder(UNCATEGORIZED, "未分類", emptyList(), null, false)
 
+    fun automaticTarget(app: AppItem, folders: List<OrganizerFolder>): FolderTarget {
+        val target = folders.maxWithOrNull(
+            compareBy<OrganizerFolder> { score(app, it) }.thenBy { if (it.custom) 1 else 0 }
+        )
+        val weight = target?.let { score(app, it) } ?: 0
+        return if (target == null || weight == 0) {
+            FolderTarget(UNCATEGORIZED, 10)
+        } else {
+            FolderTarget(target.id, weight)
+        }
+    }
+
     private fun score(app: AppItem, folder: OrganizerFolder): Int {
-        var value = if (folder.category == app.category) 60 else 0
         val label = app.label.lowercase(Locale.US)
         val packageName = app.packageName.lowercase(Locale.US)
-        folder.keywords.forEach { keyword ->
+        val keywordMatch = folder.keywords.any { keyword ->
             val key = keyword.lowercase(Locale.US).trim()
-            if (key.length < 2) return@forEach
-            value += when {
-                label == key -> 90
-                label.contains(key) -> 50
-                packageName.contains(key) -> 50
-                packageSegments(packageName).any { isAdjacentSwap(it, key) } -> 45
-                else -> 0
-            }
+            key.length >= 2 && (
+                label == key ||
+                    label.contains(key) ||
+                    packageName.contains(key) ||
+                    packageSegments(packageName).any { isAdjacentSwap(it, key) }
+                )
         }
+        if (keywordMatch) return 50
+        if (folder.category != null && folder.category == app.category) return 20
         if (folder.id == "system" && app.isSystem && systemKeywords.any { packageName.contains(it) }) {
-            value += 80
+            return 20
         }
-        return value
+        return 0
     }
 
     private fun packageSegments(packageName: String): List<String> =
