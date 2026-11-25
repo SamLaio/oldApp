@@ -6,8 +6,8 @@
 
 - app 名稱：`findPacket`
 - package / applicationId：`com.samliao.findpacket`
-- 版本：`0.5`
-- `versionCode`：`5`
+- 版本：`0.6`
+- `versionCode`：`6`
 - 最低版本：Android 10，`minSdk 29`
 - `targetSdk` / `compileSdk`：`35`
 - 技術：原生 Android Kotlin，無第三方 UI 框架。
@@ -16,6 +16,7 @@
 
 - 輸入物流單號、備註與物流商。
 - 開啟內建 WebView 查詢頁。
+- 內建查詢頁會依系統狀態列、導覽列與瀏海範圍保留安全邊界，避免頂端標題與按鈕重疊。
 - 開啟外部瀏覽器查詢頁。
 - 查詢時會把單號複製到剪貼簿。
 - 內建 WebView 會嘗試自動填入單號：
@@ -26,6 +27,7 @@
   - `ACTION_SEND`
   - `text/plain`
   - 自動從文字抽出疑似物流單號。
+  - 分享只帶入單號，不新增查詢歷史；按下內建或外部查詢後才保存紀錄。
   - 使用 `singleTask` 重用既有 app 視窗。
 - 查詢歷史使用 SQLite 保存一年內資料。
 - 點擊歷史會把物流商、單號、備註帶回上方欄位。
@@ -33,6 +35,8 @@
 - 左下角日月圓鈕可切換日間 / 夜間模式。
 
 ## 目前物流清單
+
+物流入口的自動連線核對結果隨版本保存在 `release/[版本]/carrier-check.md`。網站的驗證碼、防爬機制或區域限制可能阻擋自動檢查，連線成功也不代表已完成實際查件驗證。
 
 ```text
 黑貓宅急便
@@ -92,6 +96,8 @@ cd D:\github\oldApp\findPacket
 ```
 
 ## Release 輸出
+
+`0.6` 修正內建查詢頁與系統狀態列重疊，以及分享單號時提前新增歷史紀錄的問題。分享只帶入單號，待使用者選好物流商、填寫備註並按下查詢後才保存歷史；既有紀錄保留。
 
 ```text
 findPacket/release/[版本]/release.apk

@@ -27,6 +27,16 @@ class WebActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setOnApplyWindowInsetsListener { view, insets ->
+                @Suppress("DEPRECATION")
+                view.setPadding(
+                    insets.systemWindowInsetLeft,
+                    insets.systemWindowInsetTop,
+                    insets.systemWindowInsetRight,
+                    insets.systemWindowInsetBottom
+                )
+                insets
+            }
         }
 
         root.addView(LinearLayout(this).apply {
@@ -61,6 +71,7 @@ class WebActivity : Activity() {
         root.addView(webView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         setContentView(root)
+        root.requestApplyInsets()
         if (url.isNotEmpty()) {
             webView.loadUrl(url)
         }

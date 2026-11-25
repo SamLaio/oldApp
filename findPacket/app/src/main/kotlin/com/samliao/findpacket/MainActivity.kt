@@ -348,7 +348,6 @@ class MainActivity : Activity() {
         numberInput.setText(number)
         numberInput.setSelection(number.length)
         noteInput.setText("")
-        saveRecent(number, carrierSpinner.selectedItemPosition)
         Toast.makeText(this, R.string.shared_number_filled, Toast.LENGTH_SHORT).show()
     }
 

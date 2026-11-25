@@ -7,7 +7,7 @@
 | 資料夾 | app | package | 版本 | 最低 Android | 現況 |
 | --- | --- | --- | --- | --- | --- |
 | `seClock/` | seClock | `com.samliao.seclock` | `0.1` | Android 11 | 時鐘 Widget app，已可建立 4 種桌面透明時鐘 widget |
-| `findPacket/` | findPacket | `com.samliao.findpacket` | `0.5` | Android 10 | 包裹查詢 app，使用官方物流頁、內建 WebView、自動填單號、查詢歷史 |
+| `findPacket/` | findPacket | `com.samliao.findpacket` | `0.6` | Android 10 | 包裹查詢 app，使用官方物流頁、內建 WebView、自動填單號、查詢歷史 |
 | `SamMiniCam/` | SamMiniCam | `cam.sam.minicam` | `0.1` | Android 10 | Canon Mini Cam / FV-100 硬體連線測試 app，尚未完整移植拍照與媒體管理 |
 | `SamQuickSetting/` | SamQuickSetting | `tw.idv.samliao.quick.setting` | `0.3` | Android 10 | 懸浮快速設定面板 app，可放設定鈕、滑桿、app 捷徑與側邊條 |
 | `SamAppOrganizer/` | SamAppOrganizer | `tw.idv.samliao.apporganizer` | `0.1` | Android 10 | 用資料夾關鍵字自動整理已安裝 launcher app |
